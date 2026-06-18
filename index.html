@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>יומן מסחר — NASDAQ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0A0E18">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="יומן מסחר">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -104,6 +111,8 @@ a{color:var(--blue);text-decoration:none}
 /* ===== Tilt banner + breathing ritual ===== */
 .tilt-bar{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(251,110,114,.13),var(--panel));border:1px solid var(--red);border-radius:13px;padding:12px 14px;margin-bottom:18px}
 .tilt-bar .tb-main{flex:1;font-size:13.5px;font-weight:600;color:#ffd5d6;line-height:1.5}
+.backup-bar{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(91,141,239,.10),var(--panel));border:1px solid var(--line2);border-radius:13px;padding:11px 14px;margin-bottom:18px}
+.backup-bar .bb-main{flex:1;font-size:13px;color:var(--muted);line-height:1.5}
 .breathe-overlay{align-items:center;justify-content:center;background:radial-gradient(circle at 50% 42%, rgba(20,42,74,.72), rgba(4,7,14,.94));backdrop-filter:blur(10px)}
 .breathe-box{display:flex;flex-direction:column;align-items:center;gap:20px;padding:24px;text-align:center;max-width:460px;width:100%}
 .breathe-msg{font-size:16px;font-weight:600;color:var(--txt);line-height:1.65}
@@ -492,6 +501,10 @@ tbody tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="spacer"></div>
+    <button class="btn btn-primary" id="btnInstall" title="התקנת האפליקציה" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>
+      התקן
+    </button>
     <button class="btn btn-ghost" id="btnBreathe" title="טקס נשימה — נקה את הראש">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2-3 3 6 2-4 2 2h5"/></svg>
     </button>
@@ -555,6 +568,8 @@ tbody tr:last-child td{border-bottom:none}
   <div id="openBar"></div>
   <!-- tilt warning -->
   <div id="tiltBar"></div>
+  <!-- backup reminder -->
+  <div id="backupBar"></div>
 
   <!-- ============ DASHBOARD ============ -->
   <div class="view active" id="view-dash">
@@ -939,6 +954,24 @@ tbody tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<!-- ============ PASSPHRASE MODAL ============ -->
+<div class="overlay" id="cryptoOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-h">
+      <h2 id="cryptoTitle">סיסמה</h2>
+      <button id="cryptoCancel"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-b">
+      <p id="cryptoHint" style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px"></p>
+      <input type="password" id="cryptoPass" placeholder="סיסמה" autocomplete="off" style="width:100%;background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:12px 14px;border-radius:10px;outline:none;font-size:16px">
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-ghost" id="cryptoCancel2">ביטול</button>
+      <button class="btn btn-primary" id="cryptoOk">אישור</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ BREATHING RITUAL ============ -->
 <div class="overlay breathe-overlay" id="breatheOverlay">
   <div class="breathe-box">
@@ -967,13 +1000,54 @@ tbody tr:last-child td{border-bottom:none}
 
 /* ---------- safe storage (works on GitHub Pages; falls back to memory in sandbox) ---------- */
 const Store = (() => {
-  let mem = {};
-  let ok = true;
+  const cache = {};          // in-memory synchronous source of truth (after ready())
+  let lsOk = true;
   try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); }
-  catch(e){ ok = false; }
+  catch(e){ lsOk = false; }
+  let db = null;
+  const PREFIX = "nasdaq_";
+  function openDB(){
+    return new Promise(res => {
+      try {
+        const r = indexedDB.open("nasdaq_journal_db", 1);
+        r.onupgradeneeded = e => { e.target.result.createObjectStore("kv"); };
+        r.onsuccess = e => res(e.target.result);
+        r.onerror = () => res(null);
+      } catch(e){ res(null); }
+    });
+  }
+  function idbAll(){
+    return new Promise(res => {
+      if(!db) return res({});
+      try {
+        const out = {}; const tx = db.transaction("kv","readonly");
+        const cur = tx.objectStore("kv").openCursor();
+        cur.onsuccess = e => { const c = e.target.result; if(c){ out[c.key] = c.value; c.continue(); } else res(out); };
+        cur.onerror = () => res(out);
+      } catch(e){ res({}); }
+    });
+  }
+  function idbPut(k,v){ if(!db) return; try { db.transaction("kv","readwrite").objectStore("kv").put(v,k); } catch(e){} }
   return {
-    get(k){ try { return ok ? localStorage.getItem(k) : (mem[k] ?? null); } catch(e){ return mem[k] ?? null; } },
-    set(k,v){ try { ok ? localStorage.setItem(k,v) : (mem[k]=v); } catch(e){ mem[k]=v; } }
+    async ready(){
+      db = await openDB();
+      const fromIDB = await idbAll();
+      Object.assign(cache, fromIDB);                          // seed from IndexedDB
+      if(lsOk){                                               // localStorage wins for existing users
+        try { for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.indexOf(PREFIX)===0) cache[k]=localStorage.getItem(k); } } catch(e){}
+      }
+      for(const k in cache){ idbPut(k,cache[k]); if(lsOk){ try{ localStorage.setItem(k,cache[k]); }catch(e){} } } // mirror both ways
+    },
+    get(k){
+      if(k in cache) return cache[k];
+      if(lsOk){ try { return localStorage.getItem(k); } catch(e){} }
+      return null;
+    },
+    set(k,v){
+      cache[k]=v;
+      if(lsOk){ try { localStorage.setItem(k,v); } catch(e){} }
+      idbPut(k,v);
+    }
   };
 })();
 const KEY = "nasdaq_journal_v1";
@@ -1903,6 +1977,7 @@ function renderAll(){
   renderForecast();
   renderOpen();
   renderTilt();
+  renderBackupReminder();
   if($("#dayOverlay").classList.contains("open")) renderDay();
   populateFilterOptions();
 }
@@ -2136,32 +2211,105 @@ function delTrade(id){
   trades=trades.filter(t=>t.id!==id); save(); renderAll(); toast("נמחק");
 }
 
-/* ---------- export / import ---------- */
-function exportJSON(){
-  const payload={v:2, exportedAt:new Date().toISOString(), accounts, rules, trades};
-  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+/* ---------- crypto helpers (AES-256-GCM, key from passphrase via PBKDF2) ---------- */
+function b64(bytes){ let s=""; const a=new Uint8Array(bytes); for(let i=0;i<a.length;i++) s+=String.fromCharCode(a[i]); return btoa(s); }
+function ub64(str){ const s=atob(str); const a=new Uint8Array(s.length); for(let i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; }
+async function deriveKey(pass, salt){
+  const km=await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2", salt, iterations:150000, hash:"SHA-256"}, km, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+}
+async function encryptPayload(obj, pass){
+  const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(pass, salt);
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, new TextEncoder().encode(JSON.stringify(obj)));
+  return {fmt:"nasdaq-enc", v:1, alg:"AES-GCM", kdf:"PBKDF2-SHA256", iter:150000, salt:b64(salt), iv:b64(iv), data:b64(ct)};
+}
+async function decryptPayload(blob, pass){
+  const key=await deriveKey(pass, ub64(blob.salt));
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM", iv:ub64(blob.iv)}, key, ub64(blob.data));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+/* ---------- passphrase modal (promise-based) ---------- */
+let cryptoResolve=null;
+function askPass(title, hint){
+  return new Promise(resolve=>{
+    cryptoResolve=resolve;
+    $("#cryptoTitle").textContent=title;
+    $("#cryptoHint").textContent=hint||"";
+    $("#cryptoPass").value="";
+    $("#cryptoOverlay").classList.add("open");
+    document.body.style.overflow="hidden";
+    setTimeout(()=>$("#cryptoPass").focus(),60);
+  });
+}
+function closeCrypto(val){
+  $("#cryptoOverlay").classList.remove("open"); document.body.style.overflow="";
+  const r=cryptoResolve; cryptoResolve=null; if(r) r(val);
+}
+
+/* ---------- export / import (encrypted by default) ---------- */
+function downloadFile(text, name, type){
   const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="nasdaq-journal-"+new Date().toISOString().slice(0,10)+".json";
-  a.click(); URL.revokeObjectURL(a.href);
-  toast("גיבוי הורד ✓");
+  a.href=URL.createObjectURL(new Blob([text],{type:type||"application/json"}));
+  a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
+function markBackedUp(){ Store.set("nasdaq_lastbackup", JSON.stringify({at:Date.now(), count:trades.length})); renderBackupReminder(); }
+async function exportJSON(){
+  const payload={app:"nasdaq-journal", v:2, exportedAt:new Date().toISOString(), accounts, rules, trades, timer, vision};
+  const stamp=new Date().toISOString().slice(0,10);
+  const pass=await askPass("הצפנת הגיבוי 🔐","בחר סיסמה. תצטרך אותה כדי לשחזר — אין דרך לשחזר בלעדיה. השאר ריק לגיבוי לא מוצפן.");
+  if(pass===null) return;                                   // cancelled
+  if(pass===""){
+    if(!confirm("גיבוי לא מוצפן — הקובץ יהיה קריא לכל מי שמשיג אותו. להמשיך?")) return;
+    downloadFile(JSON.stringify(payload,null,2), "nasdaq-journal-"+stamp+".json");
+    markBackedUp(); toast("גיבוי (לא מוצפן) הורד");
+    return;
+  }
+  try{
+    const enc=await encryptPayload(payload, pass);
+    downloadFile(JSON.stringify(enc), "nasdaq-journal-"+stamp+".enc.json");
+    markBackedUp(); toast("גיבוי מוצפן הורד 🔐");
+  }catch(e){ toast("ההצפנה נכשלה"); }
+}
+function applyImport(imp){
+  if(!imp || !Array.isArray(imp.trades)){ toast("קובץ לא תקין"); return; }
+  if(!confirm("לשחזר "+imp.trades.length+" עסקאות? זה יחליף את הקיים.")) return;
+  trades=imp.trades;
+  if(Array.isArray(imp.accounts) && imp.accounts.length){ accounts=imp.accounts.filter(a=>a&&a.id&&typeof a.name==="string"); saveAccounts(); }
+  if(Array.isArray(imp.rules) && imp.rules.length){ rules=imp.rules.filter(x=>x&&typeof x.text==="string"); saveRules(); }
+  if(imp.timer && typeof imp.timer==="object"){ timer={...timer,...imp.timer}; saveTimer(); syncTimerInputs(); }
+  if(imp.vision && typeof imp.vision==="object"){ vision={...vision,...imp.vision}; saveVision(); }
+  migrateAccounts(); save(); buildAccountOptions(); paintEmotion(); renderAll(); tickTimer(); toast("שוחזר ✓");
 }
 function importJSON(file){
   const r=new FileReader();
-  r.onload=()=>{ try{
+  r.onload=async ()=>{ try{
     const data=JSON.parse(r.result);
-    let imp;
-    if(Array.isArray(data)) imp={trades:data};                       // legacy backup (trades only)
-    else if(data && Array.isArray(data.trades)) imp=data;            // v2 backup (trades+accounts+rules)
-    else throw 0;
-    if(confirm("לשחזר "+imp.trades.length+" עסקאות? זה יחליף את הקיים.")){
-      trades=imp.trades;
-      if(Array.isArray(imp.accounts) && imp.accounts.length){ accounts=imp.accounts.filter(a=>a&&a.id&&typeof a.name==="string"); saveAccounts(); }
-      if(Array.isArray(imp.rules) && imp.rules.length){ rules=imp.rules.filter(x=>x&&typeof x.text==="string"); saveRules(); }
-      migrateAccounts(); save(); buildAccountOptions(); renderAll(); toast("שוחזר ✓");
-    }
+    if(data && data.fmt==="nasdaq-enc"){                    // encrypted backup
+      const pass=await askPass("שחזור גיבוי מוצפן 🔓","הזן את הסיסמה של הגיבוי הזה.");
+      if(pass===null) return;
+      let imp; try{ imp=await decryptPayload(data, pass); }catch(e){ toast("סיסמה שגויה או קובץ פגום"); return; }
+      applyImport(imp);
+    } else if(Array.isArray(data)) applyImport({trades:data});   // legacy plain (trades only)
+    else if(data && Array.isArray(data.trades)) applyImport(data); // plain v2
+    else toast("קובץ לא תקין");
   }catch(e){ toast("קובץ לא תקין"); } };
   r.readAsText(file);
+}
+
+/* ---------- backup reminder ---------- */
+function renderBackupReminder(){
+  const el=$("#backupBar"); if(!el) return;
+  if(!trades.length){ el.innerHTML=""; return; }
+  let last=null; try{ last=JSON.parse(Store.get("nasdaq_lastbackup")||"null"); }catch(e){}
+  const days = last ? (Date.now()-last.at)/86400000 : Infinity;
+  const newSince = last ? trades.length-(last.count||0) : trades.length;
+  if(!last || days>=7 || newSince>=10){
+    const msg = !last ? "עוד לא גיבית את היומן. הדאטה חיה רק במכשיר הזה." :
+      (newSince>=10 ? `${newSince} עסקאות חדשות מאז הגיבוי האחרון.` : `עברו ${Math.floor(days)} ימים מאז הגיבוי האחרון.`);
+    el.innerHTML=`<div class="backup-bar"><span style="font-size:18px">🛟</span><div class="bb-main">${msg} כדאי לגבות (מוצפן) כדי לא לאבד אותה.</div><button class="btn btn-ghost" onclick="exportJSON()">גבה עכשיו</button></div>`;
+  } else el.innerHTML="";
 }
 
 /* ---------- toast ---------- */
@@ -2218,7 +2366,23 @@ function init3d(){
   if(scene3d){ bindGyro(); start3d(); }
 }
 
+/* ---------- PWA: service worker + install ---------- */
+let deferredPrompt=null;
+function registerSW(){
+  if("serviceWorker" in navigator){
+    window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+  }
+}
+window.addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); deferredPrompt=e; const b=$("#btnInstall"); if(b) b.style.display=""; });
+window.addEventListener("appinstalled",()=>{ deferredPrompt=null; const b=$("#btnInstall"); if(b) b.style.display="none"; toast("האפליקציה הותקנה ✓"); });
+
 /* ---------- wire up ---------- */
+$("#btnInstall").onclick=async ()=>{ if(!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; $("#btnInstall").style.display="none"; };
+$("#cryptoOk").onclick=()=>closeCrypto($("#cryptoPass").value);
+$("#cryptoCancel").onclick=()=>closeCrypto(null);
+$("#cryptoCancel2").onclick=()=>closeCrypto(null);
+$("#cryptoOverlay").onclick=e=>{ if(e.target.id==="cryptoOverlay") closeCrypto(null); };
+$("#cryptoPass").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); closeCrypto($("#cryptoPass").value); } });
 $("#btn3d").onclick=()=>set3d(!scene3d);
 $("#btnBreathe").onclick=()=>openBreathe();
 $("#breatheSkip").onclick=closeBreathe;
@@ -2271,27 +2435,33 @@ $("#vStartIn").onchange=()=>{ vision.start=Math.max(100,parseFloat($("#vStartIn"
 $("#vRiskIn").onchange=()=>{ vision.risk=Math.max(0.1,Math.min(20,parseFloat($("#vRiskIn").value)||1)); saveVision(); renderVision(); };
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){ if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
+  if(e.key==="Escape"){ if($("#cryptoOverlay").classList.contains("open")) closeCrypto(null); else if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
   if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && !$("#dayOverlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA" && document.activeElement.getAttribute("contenteditable")!=="true") openModal();
 });
 
 /* ---------- init ---------- */
-buildInstrumentOptions();
-buildMistakeChips();
-buildStars();
-loadAccounts();
-load();
-migrateAccounts();
-loadRules();
-loadTimer();
-loadVision();
-buildAccountOptions();
-syncTimerInputs();
-paintEmotion();
-renderAll();
-init3d();
-tickTimer();
-setInterval(tickTimer,1000);
+(async () => {
+  await Store.ready();                 // hydrate from IndexedDB + localStorage mirror
+  buildInstrumentOptions();
+  buildMistakeChips();
+  buildStars();
+  loadAccounts();
+  load();
+  migrateAccounts();
+  loadRules();
+  loadTimer();
+  loadVision();
+  buildAccountOptions();
+  syncTimerInputs();
+  paintEmotion();
+  scene3d = !reduceMo && Store.get("nasdaq_3d")!=="off";   // re-read after hydration
+  renderAll();
+  init3d();
+  tickTimer();
+  setInterval(tickTimer,1000);
+  renderBackupReminder();
+  registerSW();
+})();
 </script>
 </body>
 </html>
