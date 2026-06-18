@@ -82,6 +82,24 @@ a{color:var(--blue);text-decoration:none}
 .btn-primary:hover{filter:brightness(1.06);background:linear-gradient(135deg,#E8B84B,#D49A2A)}
 .btn-ghost{background:transparent;border-color:transparent;color:var(--muted)}
 .btn-ghost:hover{background:var(--panel);color:var(--txt)}
+.btn-enter{background:linear-gradient(135deg,#34D399,#1C7A5A);color:#04231a;border:none;box-shadow:0 4px 14px rgba(52,211,153,.22)}
+.btn-enter:hover{filter:brightness(1.06);background:linear-gradient(135deg,#34D399,#1C7A5A)}
+
+/* ===== Open positions banner ===== */
+.open-pos{display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
+.open-card{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(52,211,153,.10),var(--panel));border:1px solid var(--green-dim);border-radius:13px;padding:12px 14px}
+.open-card .live-dot{width:9px;height:9px;flex:0 0 auto;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(52,211,153,.6);animation:livePulse 1.6s infinite}
+@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}70%{box-shadow:0 0 0 7px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+.open-card .oc-main{flex:1;min-width:0}
+.open-card .oc-t{font-size:14px;font-weight:700}
+.open-card .oc-sub{font-size:11.5px;color:var(--faint);margin-top:2px;font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate}
+.open-card .oc-act{display:flex;gap:6px;flex:0 0 auto}
+.tag-open{display:inline-block;padding:1px 8px;border-radius:20px;font-size:10.5px;font-weight:700;background:var(--green-dim);color:#bbf7e0}
+
+/* ===== Emotion: red unless calm ===== */
+#fldEmoBefore.not-calm{color:var(--red);border-color:var(--red-dim)}
+#fldEmoBefore option{color:var(--red);background:var(--panel)}
+#fldEmoBefore option[value="רגוע"]{color:var(--green)}
 
 /* ===== Tabs ===== */
 .tabs{max-width:1180px;margin:0 auto;padding:0 18px;display:flex;gap:4px;border-bottom:1px solid var(--line);position:sticky;top:67px;z-index:30;background:var(--bg);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
@@ -451,9 +469,13 @@ tbody tr:last-child td{border-bottom:none}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
       שחזור
     </button>
-    <button class="btn btn-primary" id="btnAdd">
+    <button class="btn btn-enter" id="btnQuick" title="כניסה מהירה לעסקה פתוחה">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 5l7 7-7 7"/></svg>
+      נכנסתי
+    </button>
+    <button class="btn btn-ghost" id="btnAdd" title="עסקה מלאה">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-      עסקה חדשה
+      מלאה
     </button>
   </div>
 </div>
@@ -490,6 +512,9 @@ tbody tr:last-child td{border-bottom:none}
     </select>
     <button class="chip-clear" id="fClear">איפוס סינון</button>
   </div>
+
+  <!-- open positions -->
+  <div id="openBar"></div>
 
   <!-- ============ DASHBOARD ============ -->
   <div class="view active" id="view-dash">
@@ -710,8 +735,8 @@ tbody tr:last-child td{border-bottom:none}
         <div class="field">
           <label>רגש בכניסה</label>
           <select id="fldEmoBefore">
-            <option>רגוע</option><option>ביטחון</option><option>FOMO</option>
-            <option>נקמה</option><option>פחד</option><option>חוסר סבלנות</option><option>שעמום</option>
+            <option value="רגוע">רגוע ✓</option><option value="ביטחון">ביטחון</option><option value="FOMO">FOMO</option>
+            <option value="נקמה">נקמה</option><option value="פחד">פחד</option><option value="חוסר סבלנות">חוסר סבלנות</option><option value="שעמום">שעמום</option>
           </select>
         </div>
         <div class="field">
@@ -782,6 +807,47 @@ tbody tr:last-child td{border-bottom:none}
         <input type="number" class="num" id="acctStart" placeholder="יתרת פתיחה $" step="100">
         <button class="btn btn-primary" id="acctAddBtn">הוסף</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ QUICK ENTRY MODAL ============ -->
+<div class="overlay" id="quickOverlay">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-h">
+      <h2>נכנסתי לעסקה 🟢</h2>
+      <button id="quickClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-b">
+      <div class="form-grid">
+        <div class="field full">
+          <label>כיוון</label>
+          <div class="seg">
+            <button type="button" id="qDirLong">לונג</button>
+            <button type="button" id="qDirShort">שורט</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>מכשיר</label>
+          <select id="qInstrument"></select>
+        </div>
+        <div class="field">
+          <label>חשבון</label>
+          <select id="qAccount"></select>
+        </div>
+        <div class="field">
+          <label>חוזים</label>
+          <input type="number" class="num" id="qContracts" min="1" step="1" value="1">
+        </div>
+        <div class="field">
+          <label>מחיר כניסה</label>
+          <input type="number" class="num" id="qEntry" step="0.25" inputmode="decimal" placeholder="0.00">
+        </div>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-ghost" id="quickCancel">ביטול</button>
+      <button class="btn btn-enter" id="quickSave">נכנסתי — שמור פתוחה</button>
     </div>
   </div>
 </div>
@@ -892,8 +958,10 @@ const fmtMoney = n => (n<0?"-":"") + "$" + Math.abs(n).toLocaleString("en-US",{m
 const fmtMoney2 = n => (n<0?"-":"") + "$" + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const sign = n => n>0?"+":"";
 const clsPN = n => n>0?"pos":(n<0?"neg":"dim");
+const isOpen = t => t.exit==null || t.exit==="" || isNaN(t.exit);
 
 function pnlOf(t){
+  if(isOpen(t)) return 0;
   const pt = (INSTRUMENTS[t.instrument]?.pt) ?? 1;
   const dirMul = t.direction==="long"?1:-1;
   const gross = (t.exit - t.entry) * pt * t.contracts * dirMul;
@@ -929,9 +997,12 @@ function getFiltered(){
   }
   return list.sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
+function getClosed(){ return getFiltered().filter(t=>!isOpen(t)); }
+function openPositions(){ return trades.filter(isOpen).sort((a,b)=>new Date(b.date)-new Date(a.date)); }
 
 /* ---------- stats ---------- */
 function computeStats(list){
+  list=list.filter(t=>!isOpen(t));
   const n=list.length;
   const pnls=list.map(pnlOf);
   const net=pnls.reduce((a,b)=>a+b,0);
@@ -1038,7 +1109,7 @@ function renderCalendar(){
   // aggregate by day (use filtered set so it respects filters)
   const list=getFiltered();
   const byDay={};
-  list.forEach(t=>{ const d=new Date(t.date); if(d.getFullYear()===y&&d.getMonth()===m){ const k=d.getDate(); if(!byDay[k])byDay[k]={pnl:0,n:0}; byDay[k].pnl+=pnlOf(t); byDay[k].n++; } });
+  list.forEach(t=>{ if(isOpen(t))return; const d=new Date(t.date); if(d.getFullYear()===y&&d.getMonth()===m){ const k=d.getDate(); if(!byDay[k])byDay[k]={pnl:0,n:0}; byDay[k].pnl+=pnlOf(t); byDay[k].n++; } });
   const maxAbs=Math.max(1,...Object.values(byDay).map(v=>Math.abs(v.pnl)));
   const firstDow=new Date(y,m,1).getDay();
   const days=new Date(y,m+1,0).getDate();
@@ -1106,17 +1177,18 @@ function renderDay(){
   const el=$("#dayTrades");
   if(!list.length){ el.innerHTML=`<div class="day-empty">אין עסקאות ביום הזה.</div>`; return; }
   el.innerHTML=list.map(t=>{
+    const op=isOpen(t);
     const p=pnlOf(t), r=rOf(t), dt=new Date(t.date);
     const tm=String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0");
-    const sub=`${t.entry} → ${t.exit}`+(t.setup?" · "+escapeHtml(t.setup):"")+(r!=null?" · "+sign(r)+r.toFixed(2)+"R":"")+" · "+escapeHtml(acctName(t.account));
+    const sub=`${t.entry} → ${op?'—':t.exit}`+(t.setup?" · "+escapeHtml(t.setup):"")+(!op&&r!=null?" · "+sign(r)+r.toFixed(2)+"R":"")+" · "+escapeHtml(acctName(t.account));
     return `<div class="day-trade">
       <div class="dt-time">${tm}</div>
       <div class="dt-main">
-        <div><span class="dir-${t.direction}">${t.direction==="long"?"לונג":"שורט"}</span> <span class="num" style="font-weight:600">${escapeHtml(t.instrument)}</span> <span class="num dim">×${t.contracts}</span></div>
+        <div><span class="dir-${t.direction}">${t.direction==="long"?"לונג":"שורט"}</span> <span class="num" style="font-weight:600">${escapeHtml(t.instrument)}</span> <span class="num dim">×${t.contracts}</span>${op?' <span class="tag-open">פתוחה</span>':''}</div>
         <div class="dt-sub">${sub}</div>
         ${t.reason?`<div class="dt-sub" style="color:var(--muted);white-space:normal">💬 ${escapeHtml(t.reason)}</div>`:""}
       </div>
-      <div class="dt-pnl ${clsPN(p)}">${sign(p)+fmtMoney2(p)}</div>
+      <div class="dt-pnl ${op?'dim':clsPN(p)}">${op?'פתוחה':sign(p)+fmtMoney2(p)}</div>
       <div class="row-act">
         <button onclick="openModal('${t.id}')" title="עריכה"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
         <button class="del" onclick="delTrade('${t.id}')" title="מחיקה"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
@@ -1239,7 +1311,7 @@ function wallMessage(streak,solid,cracked){
 }
 function renderWall(){
   const el=$("#wallWrap"); if(!el) return;
-  const {bricks,streak,longest,solid,cracked}=computeWall(getFiltered());
+  const {bricks,streak,longest,solid,cracked}=computeWall(getClosed());
   if(!bricks.length){
     el.innerHTML=`<div class="wall-empty">🧱 עוד לא הנחת לבנה.<br>כל יום מסחר במשמעת מוסיף לבנה — בוא נתחיל לבנות.</div>`;
   } else {
@@ -1258,7 +1330,7 @@ function renderWall(){
 /* ---------- bar breakdown ---------- */
 function barBreakdown(list, keyFn){
   const g={};
-  list.forEach(t=>{ const k=keyFn(t)||"—"; if(!g[k])g[k]={pnl:0,n:0,w:0}; const p=pnlOf(t); g[k].pnl+=p; g[k].n++; if(p>0)g[k].w++; });
+  list.filter(t=>!isOpen(t)).forEach(t=>{ const k=keyFn(t)||"—"; if(!g[k])g[k]={pnl:0,n:0,w:0}; const p=pnlOf(t); g[k].pnl+=p; g[k].n++; if(p>0)g[k].w++; });
   return Object.entries(g).map(([k,v])=>({name:k,...v,wr:v.n?v.w/v.n*100:0})).sort((a,b)=>b.pnl-a.pnl);
 }
 function renderBars(el, rows){
@@ -1287,7 +1359,7 @@ function renderRHist(list){
     {lbl:"2..3",test:r=>r>=2&&r<3,col:"#4FE0AC"},
     {lbl:">3R",test:r=>r>=3,col:"#7CF0C8"}
   ];
-  const rs=list.map(rOf).filter(r=>r!==null);
+  const rs=list.filter(t=>!isOpen(t)).map(rOf).filter(r=>r!==null);
   if(!rs.length){ el.innerHTML=`<div class="dim" style="font-size:13px">הוסף סטופ-לוס לעסקאות כדי לראות פיזור R</div>`; return; }
   const counts=buckets.map(b=>rs.filter(b.test).length);
   const max=Math.max(1,...counts);
@@ -1313,6 +1385,7 @@ function renderTrades(){
     return;
   }
   const rows=list.map(t=>{
+    const op=isOpen(t);
     const p=pnlOf(t), r=rOf(t);
     const d=new Date(t.date);
     const dd=String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
@@ -1324,9 +1397,9 @@ function renderTrades(){
       <td><span class="num" style="font-weight:600">${t.instrument}</span></td>
       <td><span class="dir-${t.direction}">${t.direction==="long"?"לונג":"שורט"}</span></td>
       <td><span class="num">${t.contracts}</span></td>
-      <td><span class="num dim">${t.entry}</span> → <span class="num dim">${t.exit}</span></td>
-      <td><span class="num ${clsPN(p)}" style="font-weight:700">${sign(p)+fmtMoney2(p)}</span></td>
-      <td><span class="num ${r!=null?clsPN(r):'dim'}">${r!=null?(sign(r)+r.toFixed(2)+"R"):"—"}</span></td>
+      <td><span class="num dim">${t.entry}</span> → <span class="num dim">${op?'—':t.exit}</span></td>
+      <td>${op?'<span class="tag-open">פתוחה</span>':`<span class="num ${clsPN(p)}" style="font-weight:700">${sign(p)+fmtMoney2(p)}</span>`}</td>
+      <td><span class="num ${!op&&r!=null?clsPN(r):'dim'}">${!op&&r!=null?(sign(r)+r.toFixed(2)+"R"):"—"}</span></td>
       <td>${t.setup?`<span class="tag">${escapeHtml(t.setup)}</span>`:'<span class="dim">—</span>'}</td>
       <td><span class="dim" style="font-size:12px">${t.session||"—"}</span></td>
       <td><span style="color:var(--amber);font-size:12px">${stars||""}</span></td>
@@ -1381,7 +1454,7 @@ function renderPsych(){
   renderBars($("#byEmotion"), barBreakdown(list,t=>t.emoBefore));
   // mistakes
   const mg={};
-  list.forEach(t=>(t.mistakes||[]).forEach(m=>{ if(!mg[m])mg[m]={pnl:0,n:0,w:0}; mg[m].pnl+=pnlOf(t); mg[m].n++; }));
+  list.filter(t=>!isOpen(t)).forEach(t=>(t.mistakes||[]).forEach(m=>{ if(!mg[m])mg[m]={pnl:0,n:0,w:0}; mg[m].pnl+=pnlOf(t); mg[m].n++; }));
   const mrows=Object.entries(mg).map(([k,v])=>({name:k,...v,wr:0})).sort((a,b)=>a.pnl-b.pnl);
   if(!mrows.length){ $("#byMistake").innerHTML=`<div class="dim" style="font-size:13px;padding:8px 0">לא תויגו טעויות — כל הכבוד 💪</div>`; }
   else {
@@ -1420,8 +1493,8 @@ function aggBy(list, fn){
 }
 function buildInsights(list){
   const out=[];
-  const n=list.length; if(n<3) return out;
-  const sorted=list.slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const sorted=list.filter(t=>!isOpen(t)).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const n=sorted.length; if(n<3) return out;
   const pnls=sorted.map(pnlOf);
   const avg=pnls.reduce((a,b)=>a+b,0)/n;
 
@@ -1482,7 +1555,7 @@ function buildInsights(list){
 }
 function renderCoach(){
   const intro=$("#coachIntro"); if(!intro) return;
-  const list=getFiltered();
+  const list=getClosed();
   if(list.length<3){
     intro.textContent="עוד אין לי מספיק דאטה כדי לקרוא לך את המשחק. תעד עוד כמה עסקאות — ואז אתחיל לזהות איפה אתה מרוויח ואיפה הראש מפיל אותך.";
     $("#insights").innerHTML=`<div class="day-empty" style="grid-column:1/-1">צריך לפחות 3 עסקאות לניתוח 🧐</div>`;
@@ -1514,7 +1587,7 @@ function updateGuard(){
   if(earlier.length===2 && earlier.every(p=>p<0)) items.push({tone:"bad",svg:ICON_ALERT,txt:`2 הפסדים רצופים היום — הכלל אומר לעצור. בטוח שאתה רוצה?`});
   if(isNaN(parseFloat($("#fldStop").value))) items.push({tone:"warn",svg:ICON_SHIELD,txt:`לא הגדרת סטופ‑לוס — אתה לא יודע כמה אתה מסכן`});
   const emo=$("#fldEmoBefore").value;
-  if(emo==="FOMO"||emo==="נקמה") items.push({tone:"bad",svg:ICON_ALERT,txt:`נכנס מתוך «${emo}» — עצור ושאל אם זה סטאפ אמיתי או דחף`});
+  if(emo && emo!=="רגוע") items.push({tone:"bad",svg:ICON_ALERT,txt:`נכנס במצב «${emo}» — לפי הכלל שלך נכנסים רק כשרגועים`});
   const budgetSec=hmToMin(timer.budget)*60;
   if(budgetSec>0){
     const remaining=budgetSec-timerEffUsed();
@@ -1539,6 +1612,7 @@ function renderAll(){
   renderRules();
   renderWall();
   renderCoach();
+  renderOpen();
   if($("#dayOverlay").classList.contains("open")) renderDay();
   populateFilterOptions();
 }
@@ -1557,8 +1631,10 @@ function buildAccountOptions(){
   $("#fAccount").innerHTML=`<option value="">כל החשבונות</option>`+accounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
   $("#fAccount").value = accounts.some(a=>a.id===cur)?cur:"";
   const curF=$("#fldAccount").value;
-  $("#fldAccount").innerHTML=accounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
+  const acctOpts=accounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
+  $("#fldAccount").innerHTML=acctOpts;
   if(accounts.some(a=>a.id===curF)) $("#fldAccount").value=curF;
+  const q=$("#qAccount"); if(q){ const curQ=q.value; q.innerHTML=acctOpts; if(accounts.some(a=>a.id===curQ)) q.value=curQ; }
 }
 function renderAccounts(){
   const el=$("#acctList"); if(!el) return;
@@ -1599,7 +1675,9 @@ function closeAcct(){ $("#acctOverlay").classList.remove("open"); document.body.
 
 /* ---------- modal ---------- */
 function buildInstrumentOptions(){
-  $("#fldInstrument").innerHTML=Object.entries(INSTRUMENTS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("");
+  const instOpts=Object.entries(INSTRUMENTS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("");
+  $("#fldInstrument").innerHTML=instOpts;
+  if($("#qInstrument")) $("#qInstrument").innerHTML=instOpts;
   $("#fInstrument").innerHTML=`<option value="">הכל</option>`+Object.keys(INSTRUMENTS).map(k=>`<option>${k}</option>`).join("");
   const fs=$("#fSession");
   ["פתיחה (Open)","NY בוקר","NY אחה״צ","04:00–08:00 (ריוורסל)","לונדון","אסיה","אחר"].forEach(x=>{const o=document.createElement("option");o.textContent=x;fs.appendChild(o);});
@@ -1666,17 +1744,74 @@ function openModal(id, prefillDate){
     $("#fldReason").value="";
     setDir("long");
   }
-  paintStars(); buildRuleChecklist(); liveCalc(); updateGuard();
+  paintStars(); buildRuleChecklist(); paintEmotion(); liveCalc(); updateGuard();
   $("#overlay").classList.add("open");
   document.body.style.overflow="hidden";
 }
+function paintEmotion(){
+  const sel=$("#fldEmoBefore"); if(!sel) return;
+  sel.classList.toggle("not-calm", sel.value!=="רגוע");
+  Array.from(sel.options).forEach(o=>{ o.style.color = (o.value==="רגוע") ? "#34D399" : "#FB6E72"; });
+}
 function closeModal(){ $("#overlay").classList.remove("open"); document.body.style.overflow= $("#dayOverlay").classList.contains("open")?"hidden":""; }
+
+/* ---------- quick entry (open positions) ---------- */
+let qDir="long";
+function setQDir(d){ qDir=d; $("#qDirLong").classList.toggle("on-long",d==="long"); $("#qDirShort").classList.toggle("on-short",d==="short"); }
+function openQuick(){
+  setQDir("long");
+  $("#qInstrument").value="NQ";
+  $("#qAccount").value=$("#fAccount").value || (accounts[0]&&accounts[0].id) || "";
+  $("#qContracts").value=1;
+  $("#qEntry").value="";
+  $("#quickOverlay").classList.add("open");
+  document.body.style.overflow="hidden";
+  setTimeout(()=>{ const e=$("#qEntry"); if(e) e.focus(); },60);
+}
+function closeQuick(){ $("#quickOverlay").classList.remove("open"); document.body.style.overflow=""; }
+function saveQuick(){
+  const entry=parseFloat($("#qEntry").value);
+  if(isNaN(entry)){ toast("צריך מחיר כניסה"); return; }
+  trades.push({
+    id:uid(), date:new Date().toISOString(),
+    instrument:$("#qInstrument").value, direction:qDir,
+    contracts:parseInt($("#qContracts").value)||1,
+    entry, exit:null, stop:null, target:null, fees:0,
+    account:$("#qAccount").value, session:"", setup:"", reason:"",
+    emoBefore:"רגוע", plan:"yes", mistakes:[], rulesOK:[], rulesTotal:rules.length,
+    notes:"", rating:0
+  });
+  save(); closeQuick(); renderAll(); toast("נכנסת לעסקה 🟢 — סגור כשתצא");
+}
+function closePosition(id){ openModal(id); }
+function renderOpen(){
+  const el=$("#openBar"); if(!el) return;
+  let list=openPositions();
+  const fa=$("#fAccount").value; if(fa) list=list.filter(t=>t.account===fa);
+  if(!list.length){ el.innerHTML=""; return; }
+  el.innerHTML=`<div class="open-pos">`+list.map(t=>{
+    const d=new Date(t.date);
+    const tm=pad2(d.getHours())+":"+pad2(d.getMinutes());
+    const dd=pad2(d.getDate())+"/"+pad2(d.getMonth()+1);
+    return `<div class="open-card">
+      <span class="live-dot"></span>
+      <div class="oc-main">
+        <div class="oc-t"><span class="dir-${t.direction}">${t.direction==="long"?"לונג":"שורט"}</span> ${escapeHtml(t.instrument)} <span class="dim num">×${t.contracts}</span> <span class="tag-open">פתוחה</span></div>
+        <div class="oc-sub">כניסה ${t.entry} · ${escapeHtml(acctName(t.account))} · ${dd} ${tm}</div>
+      </div>
+      <div class="oc-act">
+        <button class="btn btn-enter" onclick="closePosition('${t.id}')">סגור עסקה</button>
+        <button class="btn btn-ghost" onclick="delTrade('${t.id}')" title="מחק">✕</button>
+      </div>
+    </div>`;
+  }).join("")+`</div>`;
+}
 function toLocalInput(iso){ const d=new Date(iso); const off=d.getTimezoneOffset(); const local=new Date(d.getTime()-off*60000); return local.toISOString().slice(0,16); }
 function dayAtNow(dayStr){ const now=new Date(); const d=new Date(dayStr+"T00:00:00"); d.setHours(now.getHours(),now.getMinutes(),0,0); return d.toISOString(); }
 
 function saveTrade(){
   const entry=parseFloat($("#fldEntry").value), exit=parseFloat($("#fldExit").value);
-  if(isNaN(entry)||isNaN(exit)){ toast("צריך מחיר כניסה ויציאה"); return; }
+  if(isNaN(entry)){ toast("צריך לפחות מחיר כניסה"); return; }
   const stop=parseFloat($("#fldStop").value), target=parseFloat($("#fldTarget").value);
   const t={
     id: editingId||uid(),
@@ -1684,7 +1819,7 @@ function saveTrade(){
     instrument: $("#fldInstrument").value,
     direction: draftDir,
     contracts: parseInt($("#fldContracts").value)||1,
-    entry, exit,
+    entry, exit: isNaN(exit)?null:exit,
     stop: isNaN(stop)?null:stop,
     target: isNaN(target)?null:target,
     fees: parseFloat($("#fldFees").value)||0,
@@ -1703,7 +1838,7 @@ function saveTrade(){
   if(editingId){ const i=trades.findIndex(x=>x.id===editingId); trades[i]=t; }
   else trades.push(t);
   save(); closeModal(); renderAll();
-  toast(editingId?"העסקה עודכנה":"העסקה נשמרה ✓");
+  toast(editingId?(isOpen(t)?"העסקה עודכנה (פתוחה)":"העסקה עודכנה"):(isOpen(t)?"נכנסת לעסקה 🟢":"העסקה נשמרה ✓"));
 }
 function delTrade(id){
   if(!confirm("למחוק את העסקה? אי אפשר לשחזר.")) return;
@@ -1794,12 +1929,21 @@ function init3d(){
 /* ---------- wire up ---------- */
 $("#btn3d").onclick=()=>set3d(!scene3d);
 $("#btnAdd").onclick=()=>openModal();
+$("#btnQuick").onclick=openQuick;
+$("#quickClose").onclick=closeQuick;
+$("#quickCancel").onclick=closeQuick;
+$("#quickSave").onclick=saveQuick;
+$("#quickOverlay").onclick=e=>{ if(e.target.id==="quickOverlay") closeQuick(); };
+$("#qDirLong").onclick=()=>setQDir("long");
+$("#qDirShort").onclick=()=>setQDir("short");
+$("#qEntry").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); saveQuick(); } });
 $("#modalClose").onclick=closeModal;
 $("#modalCancel").onclick=closeModal;
 $("#modalSave").onclick=saveTrade;
 $("#overlay").onclick=e=>{ if(e.target.id==="overlay") closeModal(); };
 $("#dirLong").onclick=()=>setDir("long");
 $("#dirShort").onclick=()=>setDir("short");
+$("#fldEmoBefore").addEventListener("change",paintEmotion);
 ["fldEntry","fldExit","fldStop","fldContracts","fldFees","fldInstrument"].forEach(id=>{ $("#"+id).addEventListener("input",liveCalc); $("#"+id).addEventListener("change",liveCalc); });
 ["fldStop","fldEmoBefore","fldDate"].forEach(id=>{ $("#"+id).addEventListener("input",updateGuard); $("#"+id).addEventListener("change",updateGuard); });
 $("#btnExport").onclick=exportJSON;
@@ -1828,7 +1972,7 @@ $("#timerFab").onclick=toggleRun;
 ["fAccount","fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){ if($("#overlay").classList.contains("open")) closeModal(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
+  if(e.key==="Escape"){ if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
   if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && !$("#dayOverlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA" && document.activeElement.getAttribute("contenteditable")!=="true") openModal();
 });
 
@@ -1843,6 +1987,7 @@ loadRules();
 loadTimer();
 buildAccountOptions();
 syncTimerInputs();
+paintEmotion();
 renderAll();
 init3d();
 tickTimer();
