@@ -101,6 +101,20 @@ a{color:var(--blue);text-decoration:none}
 #fldEmoBefore option{color:var(--red);background:var(--panel)}
 #fldEmoBefore option[value="רגוע"]{color:var(--green)}
 
+/* ===== Tilt banner + breathing ritual ===== */
+.tilt-bar{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(251,110,114,.13),var(--panel));border:1px solid var(--red);border-radius:13px;padding:12px 14px;margin-bottom:18px}
+.tilt-bar .tb-main{flex:1;font-size:13.5px;font-weight:600;color:#ffd5d6;line-height:1.5}
+.breathe-overlay{align-items:center;justify-content:center;background:radial-gradient(circle at 50% 42%, rgba(20,42,74,.72), rgba(4,7,14,.94));backdrop-filter:blur(10px)}
+.breathe-box{display:flex;flex-direction:column;align-items:center;gap:20px;padding:24px;text-align:center;max-width:460px;width:100%}
+.breathe-msg{font-size:16px;font-weight:600;color:var(--txt);line-height:1.65}
+.breathe-stage{height:250px;display:grid;place-items:center;width:100%}
+.breathe-orb{width:170px;height:170px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%, rgba(91,141,239,.6), rgba(52,211,153,.28) 58%, rgba(20,30,50,.15));box-shadow:0 0 70px rgba(91,141,239,.4), inset 0 0 44px rgba(255,255,255,.10);will-change:transform}
+.breathe-orb span{font-size:21px;font-weight:700;color:#eaf0ff;letter-spacing:2px}
+.breathe-count{font-family:'JetBrains Mono',monospace;color:var(--faint);font-size:13px}
+.breathe-rule{font-size:14px;color:var(--amber);font-weight:600;min-height:21px;line-height:1.5}
+.breathe-actions{display:flex;gap:10px;margin-top:4px}
+@media(prefers-reduced-motion:reduce){ .breathe-orb{transition:none} }
+
 /* ===== Tabs ===== */
 .tabs{max-width:1180px;margin:0 auto;padding:0 18px;display:flex;gap:4px;border-bottom:1px solid var(--line);position:sticky;top:67px;z-index:30;background:var(--bg);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .tabs::-webkit-scrollbar{display:none}
@@ -458,6 +472,9 @@ tbody tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="spacer"></div>
+    <button class="btn btn-ghost" id="btnBreathe" title="טקס נשימה — נקה את הראש">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2-3 3 6 2-4 2 2h5"/></svg>
+    </button>
     <button class="btn btn-ghost" id="btn3d" title="מצב תלת־מימד">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.27 6.96 8.73 5.04 8.73-5.04"/><path d="M12 22.08V12"/></svg>
     </button>
@@ -515,6 +532,8 @@ tbody tr:last-child td{border-bottom:none}
 
   <!-- open positions -->
   <div id="openBar"></div>
+  <!-- tilt warning -->
+  <div id="tiltBar"></div>
 
   <!-- ============ DASHBOARD ============ -->
   <div class="view active" id="view-dash">
@@ -848,6 +867,20 @@ tbody tr:last-child td{border-bottom:none}
     <div class="modal-f">
       <button class="btn btn-ghost" id="quickCancel">ביטול</button>
       <button class="btn btn-enter" id="quickSave">נכנסתי — שמור פתוחה</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BREATHING RITUAL ============ -->
+<div class="overlay breathe-overlay" id="breatheOverlay">
+  <div class="breathe-box">
+    <div class="breathe-msg" id="breatheMsg"></div>
+    <div class="breathe-stage"><div class="breathe-orb" id="breatheOrb"><span id="breathePhase">שאף</span></div></div>
+    <div class="breathe-count" id="breatheCount"></div>
+    <div class="breathe-rule" id="breatheRule"></div>
+    <div class="breathe-actions">
+      <button class="btn btn-ghost" id="breatheSkip">דלג</button>
+      <button class="btn btn-enter" id="breatheDone" style="display:none">אני רגוע — קדימה</button>
     </div>
   </div>
 </div>
@@ -1251,6 +1284,65 @@ function resetDay(){
   if(timer.running) timer.runStart=Date.now();
   saveTimer(); syncTimerInputs(); tickTimer(); renderAll(); toast("תקציב היום אופס");
 }
+
+/* ---------- tilt detector + breathing ritual ---------- */
+function tiltLosses(){
+  const today=dayKey(new Date().toISOString());
+  const todays=getClosed().filter(t=>dayKey(t.date)===today).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  let c=0; for(let i=todays.length-1;i>=0;i--){ if(pnlOf(todays[i])<0) c++; else break; }
+  return c;
+}
+function renderTilt(){
+  const el=$("#tiltBar"); if(!el) return;
+  const c=tiltLosses();
+  el.innerHTML = c>=2
+    ? `<div class="tilt-bar"><span style="font-size:20px">🛑</span><div class="tb-main">${c} הפסדים רצופים היום. הכלל שלך: לעצור. אל תיכנס לנקמה — קח נשימה ותחזור עם ראש נקי.</div><button class="btn btn-ghost" onclick="openBreathe('tilt')">🫁 נשימה</button></div>`
+    : "";
+}
+const BR_PHASES=[{n:"שאף",d:4000,from:.55,to:1},{n:"החזק",d:4000,from:1,to:1},{n:"נשוף",d:6000,from:1,to:.55}];
+const BR_CYCLE=14000;
+let breatheRAF=null, breatheStart=0, breatheMandatory=false;
+function brEase(t){ return t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
+function breatheFrame(ts){
+  if(!breatheStart) breatheStart=ts;
+  const elapsed=ts-breatheStart;
+  const cyc=Math.floor(elapsed/BR_CYCLE);
+  const inCyc=elapsed%BR_CYCLE;
+  let acc=0, ph=BR_PHASES[0], prog=0;
+  for(const p of BR_PHASES){ if(inCyc<acc+p.d){ ph=p; prog=(inCyc-acc)/p.d; break; } acc+=p.d; }
+  const scale=ph.from+(ph.to-ph.from)*brEase(prog);
+  const orb=$("#breatheOrb"); if(orb) orb.style.transform="scale("+scale.toFixed(3)+")";
+  const phEl=$("#breathePhase"); if(phEl) phEl.textContent=ph.n;
+  const cEl=$("#breatheCount"); if(cEl) cEl.textContent="נשימה "+(cyc+1);
+  const need=breatheMandatory?2:1;
+  if(cyc>=need){ const d=$("#breatheDone"); if(d) d.style.display=""; if(breatheMandatory){ const s=$("#breatheSkip"); if(s) s.style.display=""; } }
+  breatheRAF=requestAnimationFrame(breatheFrame);
+}
+function openBreathe(reason){
+  const lc=tiltLosses();
+  const mandatory = reason==="tilt" || lc>=2;
+  $("#breatheMsg").textContent = mandatory
+    ? `${Math.max(lc,2)} הפסדים רצופים. עצור. נשום. הכסף יחכה — המשמעת שלך לא.`
+    : "רגע לעצמך. נקה את הראש. אתה נכנס רק כשאתה רגוע.";
+  const r = rules.length ? rules[Math.floor(Math.random()*rules.length)].text : "";
+  $("#breatheRule").textContent = r ? ("זכור: "+r) : "";
+  breatheMandatory=mandatory;
+  $("#breatheDone").style.display="none";
+  $("#breatheSkip").style.display = mandatory ? "none" : "";
+  $("#breatheCount").textContent="";
+  $("#breathePhase").textContent="שאף";
+  breatheStart=0;
+  if(breatheRAF) cancelAnimationFrame(breatheRAF);
+  breatheRAF=requestAnimationFrame(breatheFrame);
+  $("#breatheOverlay").classList.add("open");
+  document.body.style.overflow="hidden";
+}
+function closeBreathe(){
+  if(breatheRAF){ cancelAnimationFrame(breatheRAF); breatheRAF=null; }
+  $("#breatheOverlay").classList.remove("open");
+  document.body.style.overflow="";
+  toast("ראש נקי. קדימה 🧘");
+}
 function fmtCountdown(sec){ sec=Math.max(0,Math.round(sec)); const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60; return (h>0?pad2(h)+":":"")+pad2(m)+":"+pad2(s); }
 function setFab(cls,txt){ const f=$("#timerFab"); if(!f) return; f.className="timer-fab "+cls; const t=f.querySelector(".fab-txt"); if(t) t.textContent=txt; }
 function tickTimer(){
@@ -1613,6 +1705,7 @@ function renderAll(){
   renderWall();
   renderCoach();
   renderOpen();
+  renderTilt();
   if($("#dayOverlay").classList.contains("open")) renderDay();
   populateFilterOptions();
 }
@@ -1839,6 +1932,7 @@ function saveTrade(){
   else trades.push(t);
   save(); closeModal(); renderAll();
   toast(editingId?(isOpen(t)?"העסקה עודכנה (פתוחה)":"העסקה עודכנה"):(isOpen(t)?"נכנסת לעסקה 🟢":"העסקה נשמרה ✓"));
+  if(!isOpen(t) && pnlOf(t)<0 && tiltLosses()>=2) setTimeout(()=>openBreathe("tilt"),350);
 }
 function delTrade(id){
   if(!confirm("למחוק את העסקה? אי אפשר לשחזר.")) return;
@@ -1928,6 +2022,9 @@ function init3d(){
 
 /* ---------- wire up ---------- */
 $("#btn3d").onclick=()=>set3d(!scene3d);
+$("#btnBreathe").onclick=()=>openBreathe();
+$("#breatheSkip").onclick=closeBreathe;
+$("#breatheDone").onclick=closeBreathe;
 $("#btnAdd").onclick=()=>openModal();
 $("#btnQuick").onclick=openQuick;
 $("#quickClose").onclick=closeQuick;
@@ -1972,7 +2069,7 @@ $("#timerFab").onclick=toggleRun;
 ["fAccount","fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){ if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
+  if(e.key==="Escape"){ if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
   if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && !$("#dayOverlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA" && document.activeElement.getAttribute("contenteditable")!=="true") openModal();
 });
 
