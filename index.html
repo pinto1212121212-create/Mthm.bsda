@@ -283,6 +283,36 @@ tbody tr:last-child td{border-bottom:none}
 .rule-check input{width:18px;height:18px;flex:0 0 auto;accent-color:var(--amber);cursor:pointer}
 .rule-check .none{color:var(--faint);font-size:13px}
 
+/* ===== Discipline wall ===== */
+.wall-wrap{display:flex;flex-direction:column-reverse;gap:5px;align-items:center;padding:16px 14px;background:radial-gradient(120% 120% at 50% 120%,rgba(52,211,153,.06),transparent 60%),linear-gradient(180deg,#0c1120,#0e1320);border:1px solid var(--line);border-radius:14px;min-height:96px;justify-content:flex-start}
+.wall-row{display:flex;gap:5px;justify-content:center}
+.wall-row.odd{padding-inline-start:18px}
+.brick{width:32px;height:16px;border-radius:4px;position:relative;background:linear-gradient(180deg,#2a3550,#1d2740);border:1px solid #34415e;box-shadow:inset 0 1px 0 rgba(255,255,255,.06);transition:transform .15s;animation:brickIn .4s ease}
+@keyframes brickIn{from{opacity:0;transform:translateY(-6px) scale(.8)}to{opacity:1;transform:none}}
+.brick.ok{background:linear-gradient(180deg,#2e8b6b,#1c7a5a);border-color:#34D399;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 0 10px rgba(52,211,153,.28)}
+.brick.bad{background:linear-gradient(180deg,#8a3338,#6e272b);border-color:#FB6E72}
+.brick.bad::after{content:"";position:absolute;inset:0;border-radius:4px;background:linear-gradient(115deg,transparent 44%,rgba(0,0,0,.55) 46%,transparent 49%,transparent 58%,rgba(0,0,0,.55) 61%,transparent 64%)}
+.brick:hover{transform:scale(1.18);z-index:2}
+.wall-stats{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:16px;font-size:12px}
+.wall-stats .ws{text-align:center}
+.wall-stats .ws b{display:block;font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:700;line-height:1.1}
+.wall-stats .ws span{color:var(--faint)}
+.wall-msg{text-align:center;font-size:13.5px;color:var(--muted);margin-top:13px;line-height:1.55}
+.wall-empty{text-align:center;color:var(--faint);font-size:13px;line-height:1.6}
+
+/* ===== Daily timer ===== */
+.timer-grid{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.timer-grid label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);font-weight:600}
+.timer-grid input[type=time],.timer-grid input[type=number]{background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:9px 11px;border-radius:10px;outline:none;font-family:'JetBrains Mono',monospace}
+.timer-grid input:focus{border-color:var(--blue)}
+.timer-grid .tm-toggle{flex-direction:row;align-items:center;gap:8px;color:var(--txt);font-size:13.5px}
+.timer-grid .tm-toggle input{width:18px;height:18px;accent-color:var(--amber)}
+.timer-display{margin-top:16px;font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate;font-size:24px;font-weight:700;text-align:center;padding:15px;border-radius:12px;background:var(--bg2);border:1px solid var(--line)}
+.timer-display.live{border-color:var(--green-dim)}
+.timer-display.grace{border-color:var(--amber);color:#f3dca0}
+.timer-display.over{border-color:var(--red-dim);color:#ffd5d6}
+.timer-display .sub{display:block;font-family:'Heebo',sans-serif;direction:rtl;font-size:12px;color:var(--faint);font-weight:500;margin-top:6px}
+
 /* ===== Accounts ===== */
 .acct-list{display:flex;flex-direction:column;gap:10px}
 .acct-item{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:12px 14px}
@@ -527,6 +557,30 @@ tbody tr:last-child td{border-bottom:none}
 
   <!-- ============ RULES ============ -->
   <div class="view" id="view-rules">
+    <div class="panel">
+      <div class="panel-h">
+        <h3>🧱 קיר המשמעת</h3>
+        <span class="hint">כל יום מסחר נקי מוסיף לבנה</span>
+      </div>
+      <div class="wall-wrap" id="wallWrap"></div>
+      <div class="wall-stats" id="wallStats"></div>
+      <div class="wall-msg" id="wallMsg"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">
+        <h3>⏱ טיימר מסחר יומי</h3>
+        <span class="hint">כלל ברזל: אין כניסה לעסקה חדשה אחרי שעת הסיום</span>
+      </div>
+      <div class="timer-grid">
+        <label>שעת סיום מסחר<input type="time" id="tmCutoff"></label>
+        <label>חלון ניהול (דק׳)<input type="number" class="num" id="tmGrace" min="0" max="60" step="1"></label>
+        <label class="tm-toggle"><input type="checkbox" id="tmEnabled">הפעל טיימר</label>
+        <button class="btn btn-ghost" id="tmNotify">🔔 אפשר התראות</button>
+      </div>
+      <div class="timer-display" id="tmDisplay"></div>
+    </div>
+
     <div class="panel">
       <div class="panel-h">
         <h3>כללי הברזל שלי</h3>
@@ -781,6 +835,14 @@ function loadRules(){
 }
 function saveRules(){ Store.set(RULES_KEY, JSON.stringify(rules)); }
 
+/* ---------- daily timer ---------- */
+let timer = {enabled:false, cutoff:"16:00", grace:5, notify:false, firedOn:""};
+const TIMER_KEY = "nasdaq_timer_v1";
+function loadTimer(){ try{ const t=JSON.parse(Store.get(TIMER_KEY)||"null"); if(t && typeof t==="object") timer={...timer,...t}; }catch(e){} }
+function saveTimer(){ Store.set(TIMER_KEY, JSON.stringify(timer)); }
+const hmToMin = hm => { const p=String(hm||"16:00").split(":"); return (parseInt(p[0])||0)*60+(parseInt(p[1])||0); };
+const pad2 = n => String(n).padStart(2,"0");
+
 /* ---------- accounts (nostro) ---------- */
 let accounts = [];
 const ACCT_KEY = "nasdaq_accounts_v1";
@@ -889,6 +951,14 @@ function renderKPIs(s){
     {label:"דרודאון מקס׳", val:fmtMoney(s.maxDD), cls:"neg", meta:"מהשיא"},
     {label:"רצף נוכחי", val:(s.curStreak>0?"+"+s.curStreak:s.curStreak), cls:clsPN(s.curStreak), meta:"מקס׳ "+s.maxWinStreak+"W · "+s.maxLossStreak+"L"}
   ];
+  const fa=$("#fAccount").value;
+  if(fa){
+    const a=accounts.find(x=>x.id===fa);
+    if(a){
+      const bal=(a.start||0)+s.net;
+      k.push({label:"יתרת חשבון", val:(sign(bal)+fmtMoney(bal)), cls:clsPN(s.net), meta:"פתיחה "+fmtMoney(a.start||0)});
+    }
+  }
   $("#kpis").innerHTML = k.map(x=>`
     <div class="kpi${x.hero?' hero':''}" data-z="${x.hero?34:20}">
       <span class="glare"></span>
@@ -1060,6 +1130,96 @@ function buildRuleChecklist(){
     c.checked=draftRules.has(c.dataset.id);
     c.onchange=()=>{ if(c.checked) draftRules.add(c.dataset.id); else draftRules.delete(c.dataset.id); };
   });
+}
+
+/* ---------- daily timer logic ---------- */
+function notify(title, body){
+  try { if(window.Notification && Notification.permission==="granted") new Notification(title,{body}); } catch(e){}
+}
+function requestNotify(){
+  if(!window.Notification){ toast("הדפדפן לא תומך בהתראות"); return; }
+  Notification.requestPermission().then(p=>{ timer.notify=(p==="granted"); saveTimer(); toast(p==="granted"?"התראות הופעלו ✓":"ההתראות נדחו"); });
+}
+function fireCutoff(){
+  const msg="המסחר נגמר להיום. יש לך "+(timer.grace||0)+" דק׳ לסגור עסקה פתוחה — אסור להיכנס לעסקה חדשה.";
+  notify("⏱ סוף יום המסחר", msg);
+  toast("⏱ המסחר נגמר להיום — אסור להיכנס לעסקאות חדשות");
+}
+function fmtCountdown(sec){ sec=Math.max(0,Math.round(sec)); const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60; return (h>0?pad2(h)+":":"")+pad2(m)+":"+pad2(s); }
+function tickTimer(){
+  const el=$("#tmDisplay"); if(!el) return;
+  if(!timer.enabled){ el.className="timer-display"; el.innerHTML="הטיימר כבוי<span class='sub'>הפעל כדי לקבל התראת סוף יום מסחר</span>"; return; }
+  const now=new Date();
+  const today=dayKey(now.toISOString());
+  const nowSec=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
+  const cutSec=hmToMin(timer.cutoff)*60;
+  const graceSec=cutSec+(timer.grace||0)*60;
+  if(nowSec<cutSec){
+    el.className="timer-display live";
+    el.innerHTML=fmtCountdown(cutSec-nowSec)+"<span class='sub'>עד סיום המסחר ("+timer.cutoff+")</span>";
+  } else {
+    if(timer.firedOn!==today){ timer.firedOn=today; saveTimer(); fireCutoff(); }
+    if(nowSec<graceSec){
+      el.className="timer-display grace";
+      el.innerHTML="🟡 "+fmtCountdown(graceSec-nowSec)+"<span class='sub'>חלון ניהול — רק לסגור עסקה פתוחה</span>";
+    } else {
+      el.className="timer-display over";
+      el.innerHTML="🔴 המסחר נגמר להיום<span class='sub'>אסור להיכנס לעסקאות חדשות</span>";
+    }
+  }
+}
+function syncTimerInputs(){
+  if(!$("#tmCutoff")) return;
+  $("#tmCutoff").value=timer.cutoff;
+  $("#tmGrace").value=timer.grace;
+  $("#tmEnabled").checked=timer.enabled;
+}
+
+/* ---------- discipline wall ---------- */
+function dayDisciplined(dayTrades){
+  return dayTrades.every(t=>{
+    const planOk = t.plan!=="no";
+    const rulesOk = !(t.rulesTotal>0) || (t.rulesOK||[]).length>=t.rulesTotal;
+    const noMistakes = !(t.mistakes && t.mistakes.length);
+    let timeOk = true;
+    if(timer.enabled){ const d=new Date(t.date); timeOk=(d.getHours()*60+d.getMinutes())<=hmToMin(timer.cutoff)+(timer.grace||0); }
+    return planOk && rulesOk && noMistakes && timeOk;
+  });
+}
+function computeWall(list){
+  const byDay={};
+  list.forEach(t=>{ const k=dayKey(t.date); (byDay[k]=byDay[k]||[]).push(t); });
+  const days=Object.keys(byDay).sort();
+  const bricks=days.map(k=>({day:k, ok:dayDisciplined(byDay[k]), n:byDay[k].length}));
+  let streak=0; for(let i=bricks.length-1;i>=0;i--){ if(bricks[i].ok) streak++; else break; }
+  let longest=0,run=0; bricks.forEach(b=>{ if(b.ok){ run++; longest=Math.max(longest,run); } else run=0; });
+  const solid=bricks.filter(b=>b.ok).length;
+  return {bricks, streak, longest, solid, cracked:bricks.length-solid};
+}
+function wallMessage(streak,solid,cracked){
+  if(streak>=20) return "הקיר שלך מבוצר. ברזל. אל תיתן ליום אחד להרוס את מה שבנית.";
+  if(streak>=10) return streak+" ימים רצופים של משמעת — הקיר מתחזק. תמשיך ככה.";
+  if(streak>=3) return streak+" לבנים רצופות. הקיר מתחיל לעמוד — אל תשבור אותו עכשיו.";
+  if(streak>=1) return "הנחת לבנה. עכשיו עוד אחת מחר. ככה בונים קיר שלא עוברים.";
+  if(cracked>0) return "הקיר נסדק לאחרונה. יום מסחר נקי אחד מתחיל לתקן אותו.";
+  return "כל יום מסחר במשמעת = לבנה. בוא נבנה קיר שאי אפשר לעבור.";
+}
+function renderWall(){
+  const el=$("#wallWrap"); if(!el) return;
+  const {bricks,streak,longest,solid,cracked}=computeWall(getFiltered());
+  if(!bricks.length){
+    el.innerHTML=`<div class="wall-empty">🧱 עוד לא הנחת לבנה.<br>כל יום מסחר במשמעת מוסיף לבנה — בוא נתחיל לבנות.</div>`;
+  } else {
+    const per = window.innerWidth<480?7:12;
+    const rows=[]; for(let i=0;i<bricks.length;i+=per) rows.push(bricks.slice(i,i+per));
+    el.innerHTML=rows.map((row,ri)=>`<div class="wall-row${ri%2?' odd':''}">`+row.map(b=>`<div class="brick ${b.ok?'ok':'bad'}" title="${b.day} · ${b.n} עסק׳ · ${b.ok?'משמעת מלאה':'נשברו כללים'}"></div>`).join("")+`</div>`).join("");
+  }
+  $("#wallStats").innerHTML=`
+    <div class="ws"><b class="pos">${streak}</b><span>רצף נוכחי</span></div>
+    <div class="ws"><b>${longest}</b><span>הרצף הארוך</span></div>
+    <div class="ws"><b class="pos">${solid}</b><span>לבנים חזקות</span></div>
+    <div class="ws"><b class="${cracked?'neg':'dim'}">${cracked}</b><span>לבנים סדוקות</span></div>`;
+  $("#wallMsg").textContent=wallMessage(streak,solid,cracked);
 }
 
 /* ---------- bar breakdown ---------- */
@@ -1275,6 +1435,24 @@ function buildInsights(list){
   const offNet=sorted.filter(t=>t.plan==="no").reduce((a,t)=>a+pnlOf(t),0);
   if(offNet<0 && planNet>0){ out.push({tone:"good",ic:"📏",h:"התוכנית עובדת",t:`לפי התוכנית הרווחת <span class="num pos">${fmtMoney(planNet)}</span>; כשסטית הפסדת <span class="num neg">${fmtMoney(offNet)}</span>. זה אולי המספר הכי חשוב כאן.`}); }
 
+  // thesis / documentation payoff
+  const withR=sorted.filter(t=>t.reason && t.reason.trim());
+  const woR=sorted.filter(t=>!(t.reason && t.reason.trim()));
+  if(withR.length>=2 && woR.length>=2){
+    const wa=withR.reduce((a,t)=>a+pnlOf(t),0)/withR.length;
+    const woa=woR.reduce((a,t)=>a+pnlOf(t),0)/woR.length;
+    if(wa>woa) out.push({tone:"good",ic:"📝",h:"תיעוד משתלם",t:`כשכתבת תזה לעסקה הממוצע שלך <span class="num pos">${sign(wa)+fmtMoney2(wa)}</span>, לעומת <span class="num ${clsPN(woa)}">${sign(woa)+fmtMoney2(woa)}</span> בלי. כתיבת ה"למה" עושה לך כסף.`});
+    else if(withR.length>=3) out.push({tone:"warn",ic:"📝",h:"תזה אמיתית?",t:`דווקא בלי תזה כתובה התוצאות שלך טובות יותר. ודא שאתה כותב את ה"למה" <b>לפני</b> הכניסה — לא כתירוץ אחרי.`});
+  }
+
+  // trading after the daily cutoff
+  if(timer.enabled){
+    const cMin=hmToMin(timer.cutoff);
+    const late=sorted.filter(t=>{ const d=new Date(t.date); return d.getHours()*60+d.getMinutes()>cMin; });
+    if(late.length>=2){ const ln=late.reduce((a,t)=>a+pnlOf(t),0);
+      out.push({tone:ln<0?"bad":"warn",ic:"⏰",h:"מסחר אחרי השעה",t:`${late.length} עסקאות אחרי שעת הסיום (${timer.cutoff}) — סה״כ <span class="num ${clsPN(ln)}">${sign(ln)+fmtMoney(ln)}</span>. ${ln<0?"בדיוק בשביל זה קבעת את הכלל.":"גם אם הרווחת — זו חריגה מהמשמעת."}`}); }
+  }
+
   return out;
 }
 function renderCoach(){
@@ -1312,6 +1490,11 @@ function updateGuard(){
   if(isNaN(parseFloat($("#fldStop").value))) items.push({tone:"warn",svg:ICON_SHIELD,txt:`לא הגדרת סטופ‑לוס — אתה לא יודע כמה אתה מסכן`});
   const emo=$("#fldEmoBefore").value;
   if(emo==="FOMO"||emo==="נקמה") items.push({tone:"bad",svg:ICON_ALERT,txt:`נכנס מתוך «${emo}» — עצור ושאל אם זה סטאפ אמיתי או דחף`});
+  if(timer.enabled){
+    const cMin=hmToMin(timer.cutoff), tMin=when.getHours()*60+when.getMinutes();
+    if(tMin>cMin+(timer.grace||0)) items.push({tone:"bad",svg:ICON_ALERT,txt:`עברת את שעת הסיום (${timer.cutoff}) — כלל הברזל אוסר עסקה חדשה`});
+    else if(tMin>cMin) items.push({tone:"warn",svg:ICON_ALERT,txt:`חלון ניהול בלבד — רק לסגור עסקה פתוחה, לא להיכנס לחדשה`});
+  }
   el.className = items.length ? "guard show" : "guard";
   el.innerHTML = items.map(i=>`<div class="guard-item ${i.tone}">${i.svg}<span>${i.txt}</span></div>`).join("");
 }
@@ -1327,6 +1510,7 @@ function renderAll(){
   renderAnalytics();
   renderPsych();
   renderRules();
+  renderWall();
   renderCoach();
   if($("#dayOverlay").classList.contains("open")) renderDay();
   populateFilterOptions();
@@ -1608,6 +1792,10 @@ $("#acctClose").onclick=closeAcct;
 $("#acctOverlay").onclick=e=>{ if(e.target.id==="acctOverlay") closeAcct(); };
 $("#acctAddBtn").onclick=addAccount;
 $("#acctName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addAccount(); } });
+$("#tmCutoff").onchange=()=>{ timer.cutoff=$("#tmCutoff").value||"16:00"; timer.firedOn=""; saveTimer(); tickTimer(); renderAll(); };
+$("#tmGrace").onchange=()=>{ timer.grace=Math.max(0,Math.min(60,parseInt($("#tmGrace").value)||0)); saveTimer(); tickTimer(); renderAll(); };
+$("#tmEnabled").onchange=()=>{ timer.enabled=$("#tmEnabled").checked; if(timer.enabled && window.Notification && Notification.permission==="default") requestNotify(); saveTimer(); tickTimer(); renderAll(); };
+$("#tmNotify").onclick=requestNotify;
 ["fAccount","fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
@@ -1623,9 +1811,13 @@ loadAccounts();
 load();
 migrateAccounts();
 loadRules();
+loadTimer();
 buildAccountOptions();
+syncTimerInputs();
 renderAll();
 init3d();
+tickTimer();
+setInterval(tickTimer,1000);
 </script>
 </body>
 </html>
