@@ -113,6 +113,26 @@ a{color:var(--blue);text-decoration:none}
 .tilt-bar .tb-main{flex:1;font-size:13.5px;font-weight:600;color:#ffd5d6;line-height:1.5}
 .backup-bar{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(91,141,239,.10),var(--panel));border:1px solid var(--line2);border-radius:13px;padding:11px 14px;margin-bottom:18px}
 .backup-bar .bb-main{flex:1;font-size:13px;color:var(--muted);line-height:1.5}
+
+/* ===== Vault lock screen ===== */
+.lock-overlay{position:fixed;inset:0;z-index:300;background:radial-gradient(circle at 50% 32%, #111b30, #06090f 72%);display:flex;align-items:center;justify-content:center;padding:24px}
+.lock-overlay.hidden{display:none}
+.lock-box{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;gap:13px;text-align:center}
+.lock-icon{font-size:42px;filter:drop-shadow(0 6px 18px rgba(232,184,75,.25))}
+.lock-box h2{font-size:20px;font-weight:700}
+.lock-sub{font-size:13px;color:var(--muted);line-height:1.6}
+.lock-box input{width:100%;background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:13px 14px;border-radius:11px;outline:none;font-size:16px;text-align:center}
+.lock-box input:focus{border-color:var(--amber)}
+.lock-meter{width:100%;height:6px;border-radius:4px;background:var(--bg2);overflow:hidden}
+.lock-meter i{display:block;height:100%;width:0;background:var(--red);transition:width .25s,background .25s}
+.lock-meter.s1 i{width:25%;background:#FB6E72}
+.lock-meter.s2 i{width:50%;background:#E8B84B}
+.lock-meter.s3 i{width:75%;background:#5B8DEF}
+.lock-meter.s4 i{width:100%;background:#34D399}
+.lock-err{font-size:12.5px;color:var(--red);min-height:16px;font-weight:600}
+.lock-box .btn-primary{width:100%;justify-content:center;padding:12px}
+.lock-link{font-size:12px;color:var(--faint);background:none;border:none;margin-top:2px}
+.lock-link:hover{color:var(--muted)}
 .breathe-overlay{align-items:center;justify-content:center;background:radial-gradient(circle at 50% 42%, rgba(20,42,74,.72), rgba(4,7,14,.94));backdrop-filter:blur(10px)}
 .breathe-box{display:flex;flex-direction:column;align-items:center;gap:20px;padding:24px;text-align:center;max-width:460px;width:100%}
 .breathe-msg{font-size:16px;font-weight:600;color:var(--txt);line-height:1.65}
@@ -501,6 +521,9 @@ tbody tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="spacer"></div>
+    <button class="btn btn-ghost" id="btnLock" title="נעל את הכספת">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </button>
     <button class="btn btn-primary" id="btnInstall" title="התקנת האפליקציה" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M5 21h14"/></svg>
       התקן
@@ -995,59 +1018,82 @@ tbody tr:last-child td{border-bottom:none}
 
 <div class="toast" id="toast"></div>
 
+<!-- ============ VAULT LOCK SCREEN ============ -->
+<div class="lock-overlay" id="lockOverlay">
+  <div class="lock-box">
+    <div class="lock-icon">🔒</div>
+    <h2 id="lockTitle">כספת היומן</h2>
+    <p class="lock-sub" id="lockSub">טוען…</p>
+    <input type="password" id="lockPass" placeholder="קוד כניסה" autocomplete="off">
+    <input type="password" id="lockPass2" placeholder="אישור קוד" autocomplete="off" style="display:none">
+    <div class="lock-meter" id="lockMeter" style="display:none"><i></i></div>
+    <div class="lock-err" id="lockErr"></div>
+    <button class="btn btn-primary" id="lockBtn">כניסה</button>
+    <button class="lock-link" id="lockForgot" style="display:none">שכחתי את הקוד</button>
+  </div>
+</div>
+
 <script>
 "use strict";
 
-/* ---------- safe storage (works on GitHub Pages; falls back to memory in sandbox) ---------- */
+/* ---------- crypto primitives (Web Crypto · AES-256-GCM + PBKDF2-SHA256) ---------- */
+const KDF_ITER = 600000;                       // OWASP-2023 guidance for PBKDF2-SHA256
+const _te = new TextEncoder(), _td = new TextDecoder();
+function b64(buf){ let s=""; const a=new Uint8Array(buf); for(let i=0;i<a.length;i++) s+=String.fromCharCode(a[i]); return btoa(s); }
+function ub64(str){ const s=atob(str); const a=new Uint8Array(s.length); for(let i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; }
+function randBytes(n){ return crypto.getRandomValues(new Uint8Array(n)); }
+async function deriveKey(pass, salt, iter){
+  const km = await crypto.subtle.importKey("raw", _te.encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2", salt, iterations:iter||KDF_ITER, hash:"SHA-256"}, km, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+}
+async function aesEncrypt(key, plainStr){ const iv=randBytes(12); const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv}, key, _te.encode(plainStr)); return {iv:b64(iv), ct:b64(ct)}; }
+async function aesDecrypt(key, obj){ const pt=await crypto.subtle.decrypt({name:"AES-GCM", iv:ub64(obj.iv)}, key, ub64(obj.ct)); return _td.decode(pt); }
+function isEnvelope(str){ try{ const o=JSON.parse(str); return o && typeof o==="object" && typeof o.iv==="string" && typeof o.ct==="string"; }catch(e){ return false; } }
+function passStrength(p){ let s=0; if(p.length>=8)s++; if(p.length>=12)s++; if(/[a-z]/.test(p)&&/[A-Z]/.test(p))s++; if(/\d/.test(p))s++; if(/[^A-Za-z0-9]/.test(p))s++; return Math.min(4,s); }
+function passOk(p){ return p.length>=8 && passStrength(p)>=2; }
+
+/* ---------- encrypted-at-rest vault (IndexedDB + localStorage mirror) ---------- */
 const Store = (() => {
-  const cache = {};          // in-memory synchronous source of truth (after ready())
-  let lsOk = true;
-  try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); }
-  catch(e){ lsOk = false; }
-  let db = null;
-  const PREFIX = "nasdaq_";
-  function openDB(){
-    return new Promise(res => {
-      try {
-        const r = indexedDB.open("nasdaq_journal_db", 1);
-        r.onupgradeneeded = e => { e.target.result.createObjectStore("kv"); };
-        r.onsuccess = e => res(e.target.result);
-        r.onerror = () => res(null);
-      } catch(e){ res(null); }
-    });
-  }
-  function idbAll(){
-    return new Promise(res => {
-      if(!db) return res({});
-      try {
-        const out = {}; const tx = db.transaction("kv","readonly");
-        const cur = tx.objectStore("kv").openCursor();
-        cur.onsuccess = e => { const c = e.target.result; if(c){ out[c.key] = c.value; c.continue(); } else res(out); };
-        cur.onerror = () => res(out);
-      } catch(e){ res({}); }
-    });
-  }
-  function idbPut(k,v){ if(!db) return; try { db.transaction("kv","readwrite").objectStore("kv").put(v,k); } catch(e){} }
+  const cache = {};        // decrypted, in-memory, synchronous — only populated after unlock
+  let raw = {};            // raw persisted strings (ciphertext envelopes, legacy plaintext, or vault meta)
+  let lsOk = true; try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); } catch(e){ lsOk=false; }
+  let db=null, masterKey=null, writeChain=Promise.resolve();
+  const PREFIX="nasdaq_", META="__vault__";
+  function openDB(){ return new Promise(res=>{ try{ const r=indexedDB.open("nasdaq_journal_db",1); r.onupgradeneeded=e=>{ e.target.result.createObjectStore("kv"); }; r.onsuccess=e=>res(e.target.result); r.onerror=()=>res(null);}catch(e){res(null);} }); }
+  function idbAll(){ return new Promise(res=>{ if(!db) return res({}); try{ const out={}; const cur=db.transaction("kv","readonly").objectStore("kv").openCursor(); cur.onsuccess=e=>{const c=e.target.result; if(c){out[c.key]=c.value; c.continue();} else res(out);}; cur.onerror=()=>res(out);}catch(e){res({});} }); }
+  function idbPut(k,v){ if(!db) return; try{ db.transaction("kv","readwrite").objectStore("kv").put(v,k);}catch(e){} }
+  function idbDel(k){ if(!db) return; try{ db.transaction("kv","readwrite").objectStore("kv").delete(k);}catch(e){} }
+  function persistRaw(k,str){ raw[k]=str; if(lsOk){try{localStorage.setItem(k,str);}catch(e){}} idbPut(k,str); }
+  function removeRaw(k){ delete raw[k]; if(lsOk){try{localStorage.removeItem(k);}catch(e){}} idbDel(k); }
+  function dataKeys(){ return Object.keys(raw).filter(k=>k!==META && k.indexOf(PREFIX)===0); }
+  async function persistEnc(k,v){ persistRaw(k, JSON.stringify(await aesEncrypt(masterKey, v))); }
   return {
     async ready(){
-      db = await openDB();
-      const fromIDB = await idbAll();
-      Object.assign(cache, fromIDB);                          // seed from IndexedDB
-      if(lsOk){                                               // localStorage wins for existing users
-        try { for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.indexOf(PREFIX)===0) cache[k]=localStorage.getItem(k); } } catch(e){}
-      }
-      for(const k in cache){ idbPut(k,cache[k]); if(lsOk){ try{ localStorage.setItem(k,cache[k]); }catch(e){} } } // mirror both ways
+      db=await openDB(); raw=await idbAll();
+      if(lsOk){ try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k===META || (k && k.indexOf(PREFIX)===0)) raw[k]=localStorage.getItem(k); } }catch(e){} }
+      for(const k in raw){ idbPut(k,raw[k]); if(lsOk){try{localStorage.setItem(k,raw[k]);}catch(e){}} }   // mirror both ways
     },
-    get(k){
-      if(k in cache) return cache[k];
-      if(lsOk){ try { return localStorage.getItem(k); } catch(e){} }
-      return null;
+    hasVault(){ return !!raw[META]; },
+    hasLegacy(){ return dataKeys().some(k=>!isEnvelope(raw[k])); },
+    async setupPasscode(pass){
+      const salt=randBytes(16); masterKey=await deriveKey(pass,salt,KDF_ITER);
+      for(const k of dataKeys()){ if(!isEnvelope(raw[k])){ cache[k]=raw[k]; await persistEnc(k, raw[k]); } else { cache[k]=await aesDecrypt(masterKey, JSON.parse(raw[k])); } }
+      const v=await aesEncrypt(masterKey, "nasdaq-ok");
+      persistRaw(META, JSON.stringify({salt:b64(salt), iter:KDF_ITER, v}));   // written last = migration committed
     },
-    set(k,v){
-      cache[k]=v;
-      if(lsOk){ try { localStorage.setItem(k,v); } catch(e){} }
-      idbPut(k,v);
-    }
+    async unlock(pass){
+      let meta; try{ meta=JSON.parse(raw[META]); }catch(e){ return false; }
+      const key=await deriveKey(pass, ub64(meta.salt), meta.iter||KDF_ITER);
+      try{ if(await aesDecrypt(key, meta.v)!=="nasdaq-ok") return false; }catch(e){ return false; }
+      masterKey=key;
+      for(const k of dataKeys()){ try{ cache[k]=isEnvelope(raw[k]) ? await aesDecrypt(masterKey, JSON.parse(raw[k])) : raw[k]; }catch(e){} }
+      return true;
+    },
+    isUnlocked(){ return !!masterKey; },
+    lock(){ masterKey=null; for(const k in cache) delete cache[k]; },
+    get(k){ return (k in cache) ? cache[k] : null; },
+    set(k,v){ cache[k]=v; if(!masterKey) return; const val=v; writeChain=writeChain.then(()=>persistEnc(k,val)).catch(()=>{}); },
+    async wipe(){ for(const k of Object.keys(raw)) removeRaw(k); for(const k in cache) delete cache[k]; masterKey=null; }
   };
 })();
 const KEY = "nasdaq_journal_v1";
@@ -2211,23 +2257,16 @@ function delTrade(id){
   trades=trades.filter(t=>t.id!==id); save(); renderAll(); toast("נמחק");
 }
 
-/* ---------- crypto helpers (AES-256-GCM, key from passphrase via PBKDF2) ---------- */
-function b64(bytes){ let s=""; const a=new Uint8Array(bytes); for(let i=0;i<a.length;i++) s+=String.fromCharCode(a[i]); return btoa(s); }
-function ub64(str){ const s=atob(str); const a=new Uint8Array(s.length); for(let i=0;i<s.length;i++) a[i]=s.charCodeAt(i); return a; }
-async function deriveKey(pass, salt){
-  const km=await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey({name:"PBKDF2", salt, iterations:150000, hash:"SHA-256"}, km, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
-}
+/* ---------- backup encryption (reuses shared AES-256-GCM + PBKDF2 600k) ---------- */
 async function encryptPayload(obj, pass){
-  const salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
-  const key=await deriveKey(pass, salt);
-  const ct=await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, new TextEncoder().encode(JSON.stringify(obj)));
-  return {fmt:"nasdaq-enc", v:1, alg:"AES-GCM", kdf:"PBKDF2-SHA256", iter:150000, salt:b64(salt), iv:b64(iv), data:b64(ct)};
+  const salt=randBytes(16);
+  const key=await deriveKey(pass, salt, KDF_ITER);
+  const env=await aesEncrypt(key, JSON.stringify(obj));
+  return {fmt:"nasdaq-enc", v:2, alg:"AES-GCM", kdf:"PBKDF2-SHA256", iter:KDF_ITER, salt:b64(salt), iv:env.iv, data:env.ct};
 }
 async function decryptPayload(blob, pass){
-  const key=await deriveKey(pass, ub64(blob.salt));
-  const pt=await crypto.subtle.decrypt({name:"AES-GCM", iv:ub64(blob.iv)}, key, ub64(blob.data));
-  return JSON.parse(new TextDecoder().decode(pt));
+  const key=await deriveKey(pass, ub64(blob.salt), blob.iter||KDF_ITER);
+  return JSON.parse(await aesDecrypt(key, {iv:blob.iv, ct:blob.data}));
 }
 
 /* ---------- passphrase modal (promise-based) ---------- */
@@ -2258,14 +2297,9 @@ function markBackedUp(){ Store.set("nasdaq_lastbackup", JSON.stringify({at:Date.
 async function exportJSON(){
   const payload={app:"nasdaq-journal", v:2, exportedAt:new Date().toISOString(), accounts, rules, trades, timer, vision};
   const stamp=new Date().toISOString().slice(0,10);
-  const pass=await askPass("הצפנת הגיבוי 🔐","בחר סיסמה. תצטרך אותה כדי לשחזר — אין דרך לשחזר בלעדיה. השאר ריק לגיבוי לא מוצפן.");
+  const pass=await askPass("הצפנת הגיבוי 🔐","בחר סיסמה חזקה (8+ תווים). תצטרך אותה כדי לשחזר — אין דרך לשחזר בלעדיה.");
   if(pass===null) return;                                   // cancelled
-  if(pass===""){
-    if(!confirm("גיבוי לא מוצפן — הקובץ יהיה קריא לכל מי שמשיג אותו. להמשיך?")) return;
-    downloadFile(JSON.stringify(payload,null,2), "nasdaq-journal-"+stamp+".json");
-    markBackedUp(); toast("גיבוי (לא מוצפן) הורד");
-    return;
-  }
+  if(!passOk(pass)){ toast("סיסמה חלשה מדי — לפחות 8 תווים ושילוב אותיות/ספרות"); return; }
   try{
     const enc=await encryptPayload(payload, pass);
     downloadFile(JSON.stringify(enc), "nasdaq-journal-"+stamp+".enc.json");
@@ -2366,6 +2400,67 @@ function init3d(){
   if(scene3d){ bindGyro(); start3d(); }
 }
 
+/* ---------- vault lock screen ---------- */
+let lockTimer=null, lockMode="unlock", unlockResolve=null;
+const LOCK_MS=5*60*1000;
+function showLock(mode){
+  lockMode=mode;
+  $("#lockOverlay").classList.remove("hidden");
+  $("#lockErr").textContent=""; $("#lockPass").value=""; $("#lockPass2").value=""; $("#lockMeter").className="lock-meter";
+  if(mode==="setup"){
+    $("#lockTitle").textContent="צור קוד כניסה";
+    $("#lockSub").innerHTML="הקוד יצפין את כל היומן במכשיר. <b>אין שחזור אם תשכח אותו</b> — שמור אותו במקום בטוח.";
+    $("#lockPass").placeholder="קוד חדש (8+ תווים)";
+    $("#lockPass2").style.display=""; $("#lockMeter").style.display="";
+    $("#lockBtn").textContent="הפעל כספת"; $("#lockForgot").style.display="none";
+  } else {
+    $("#lockTitle").textContent="כספת היומן 🔒";
+    $("#lockSub").textContent="הזן את קוד הכניסה כדי לפתוח את היומן.";
+    $("#lockPass").placeholder="קוד כניסה";
+    $("#lockPass2").style.display="none"; $("#lockMeter").style.display="none";
+    $("#lockBtn").textContent="פתח"; $("#lockForgot").style.display="";
+  }
+  setTimeout(()=>$("#lockPass").focus(),60);
+}
+function hideLock(){ $("#lockOverlay").classList.add("hidden"); }
+function unlockFlow(){ return new Promise(resolve=>{ unlockResolve=resolve; showLock(Store.hasVault()?"unlock":"setup"); }); }
+async function lockSubmit(){
+  const btn=$("#lockBtn"); if(btn.disabled) return; btn.disabled=true; $("#lockErr").textContent="";
+  try{
+    if(lockMode==="setup"){
+      const p=$("#lockPass").value, p2=$("#lockPass2").value;
+      if(!passOk(p)){ $("#lockErr").textContent="קוד חלש מדי — לפחות 8 תווים, אותיות וספרות"; return; }
+      if(p!==p2){ $("#lockErr").textContent="הקודים לא תואמים"; return; }
+      $("#lockSub").textContent="מצפין את היומן… רגע 🔐";
+      await Store.setupPasscode(p);
+    } else {
+      $("#lockSub").textContent="פותח…";
+      const ok=await Store.unlock($("#lockPass").value);
+      if(!ok){ $("#lockErr").textContent="קוד שגוי"; $("#lockSub").textContent="הזן את קוד הכניסה כדי לפתוח את היומן."; return; }
+    }
+    hideLock();
+    if(unlockResolve){ const r=unlockResolve; unlockResolve=null; r(); }   // initial boot
+    else { bootData(); }                                                   // re-unlock after auto-lock
+    resetLockTimer();
+  } catch(e){ $("#lockErr").textContent="שגיאה — נסה שוב"; }
+  finally { btn.disabled=false; }
+}
+function lockApp(){
+  if(!Store.isUnlocked()) return;
+  clearTimeout(lockTimer);
+  Store.lock();
+  trades=[]; accounts=[]; rules=[];     // drop sensitive data from memory
+  try { renderAll(); } catch(e){}       // and blank it out of the rendered DOM
+  showLock("unlock");
+}
+function resetLockTimer(){ clearTimeout(lockTimer); if(Store.isUnlocked()) lockTimer=setTimeout(lockApp, LOCK_MS); }
+function bootData(){
+  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision();
+  buildAccountOptions(); syncTimerInputs(); paintEmotion();
+  scene3d = !reduceMo && Store.get("nasdaq_3d")!=="off";
+  renderAll(); renderBackupReminder();
+}
+
 /* ---------- PWA: service worker + install ---------- */
 let deferredPrompt=null;
 function registerSW(){
@@ -2383,6 +2478,13 @@ $("#cryptoCancel").onclick=()=>closeCrypto(null);
 $("#cryptoCancel2").onclick=()=>closeCrypto(null);
 $("#cryptoOverlay").onclick=e=>{ if(e.target.id==="cryptoOverlay") closeCrypto(null); };
 $("#cryptoPass").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); closeCrypto($("#cryptoPass").value); } });
+$("#lockBtn").onclick=lockSubmit;
+$("#btnLock").onclick=lockApp;
+$("#lockPass").addEventListener("input",()=>{ if(lockMode==="setup") $("#lockMeter").className="lock-meter s"+passStrength($("#lockPass").value); });
+$("#lockPass").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); if(lockMode==="setup"){ $("#lockPass2").focus(); } else lockSubmit(); } });
+$("#lockPass2").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); lockSubmit(); } });
+$("#lockForgot").onclick=async ()=>{ if(!confirm("מחיקת הכספת תמחק את כל הדאטה במכשיר. אפשר יהיה לשחזר רק מגיבוי מוצפן. להמשיך?")) return; await Store.wipe(); location.reload(); };
+["pointerdown","keydown","touchstart"].forEach(ev=>window.addEventListener(ev,resetLockTimer,{passive:true}));
 $("#btn3d").onclick=()=>set3d(!scene3d);
 $("#btnBreathe").onclick=()=>openBreathe();
 $("#breatheSkip").onclick=closeBreathe;
@@ -2441,25 +2543,16 @@ document.addEventListener("keydown",e=>{
 
 /* ---------- init ---------- */
 (async () => {
-  await Store.ready();                 // hydrate from IndexedDB + localStorage mirror
+  await Store.ready();                 // load raw entries (encrypted) from IndexedDB + localStorage
   buildInstrumentOptions();
   buildMistakeChips();
   buildStars();
-  loadAccounts();
-  load();
-  migrateAccounts();
-  loadRules();
-  loadTimer();
-  loadVision();
-  buildAccountOptions();
-  syncTimerInputs();
-  paintEmotion();
-  scene3d = !reduceMo && Store.get("nasdaq_3d")!=="off";   // re-read after hydration
-  renderAll();
+  await unlockFlow();                   // gate: create passcode (first run / migrate) or unlock the vault
+  bootData();                          // decrypt + load + render
   init3d();
   tickTimer();
   setInterval(tickTimer,1000);
-  renderBackupReminder();
+  resetLockTimer();                    // start inactivity auto-lock
   registerSW();
 })();
 </script>
