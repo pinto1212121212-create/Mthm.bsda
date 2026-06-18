@@ -115,6 +115,26 @@ a{color:var(--blue);text-decoration:none}
 .breathe-actions{display:flex;gap:10px;margin-top:4px}
 @media(prefers-reduced-motion:reduce){ .breathe-orb{transition:none} }
 
+/* ===== Vision (moonshot) ===== */
+.vision-hero{text-align:center;padding:22px 14px;background:radial-gradient(120% 130% at 50% 0%, rgba(232,184,75,.13), transparent 62%);border-radius:14px}
+.vision-hero .goal{font-family:'JetBrains Mono',monospace;font-size:38px;font-weight:800;background:linear-gradient(135deg,#E8B84B,#FFEDB0,#D49A2A);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.05;letter-spacing:-1px}
+.vision-hero .eta{font-size:13.5px;color:var(--muted);margin-top:10px;line-height:1.6}
+.vision-hero .eta b{color:var(--amber);font-family:'JetBrains Mono',monospace}
+.vision-inputs{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:16px}
+.vision-inputs label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--faint);font-weight:600}
+.vision-inputs input{width:128px;background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:8px 10px;border-radius:9px;outline:none;font-family:'JetBrains Mono',monospace;text-align:center;direction:ltr}
+.vision-inputs input:focus{border-color:var(--amber)}
+.ladder{display:flex;flex-direction:column;gap:8px;margin-top:18px}
+.rung{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:11px 14px;position:relative;overflow:hidden}
+.rung .rung-fill{position:absolute;top:0;bottom:0;right:0;background:linear-gradient(270deg,rgba(232,184,75,.18),rgba(232,184,75,.04));border-inline-start:2px solid var(--amber)}
+.rung.done{border-color:var(--green-dim)}
+.rung.done .rung-fill{background:linear-gradient(270deg,rgba(52,211,153,.18),rgba(52,211,153,.04));border-inline-start-color:var(--green)}
+.rung .rtick{position:relative;z-index:1;font-size:15px}
+.rung .ramt{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;position:relative;z-index:1;min-width:78px}
+.rung .reta{flex:1;text-align:left;font-size:11.5px;color:var(--muted);position:relative;z-index:1;font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate}
+.vision-engine{font-size:13px;color:var(--muted);line-height:1.65;margin-top:16px;padding:14px;background:var(--bg2);border:1px solid var(--line);border-radius:12px}
+.vision-engine b{color:var(--txt)}
+
 /* ===== Tabs ===== */
 .tabs{max-width:1180px;margin:0 auto;padding:0 18px;display:flex;gap:4px;border-bottom:1px solid var(--line);position:sticky;top:67px;z-index:30;background:var(--bg);overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .tabs::-webkit-scrollbar{display:none}
@@ -695,6 +715,21 @@ tbody tr:last-child td{border-bottom:none}
       <div class="panel-h"><h3>💰 הפער של המשמעת</h3></div>
       <div id="fcGap" style="font-size:14px;line-height:1.6;color:var(--muted)"></div>
     </div>
+
+    <div class="panel">
+      <div class="panel-h"><h3>🚀 החזון — מאה מיליון</h3><span class="hint">לא פחד. כיוון.</span></div>
+      <div class="vision-hero">
+        <div class="goal" id="vGoal">$100,000,000</div>
+        <div class="eta" id="vEta"></div>
+        <div class="vision-inputs">
+          <label>היעד $<input type="number" id="vGoalIn" step="1000000" inputmode="numeric"></label>
+          <label>הון התחלתי $<input type="number" id="vStartIn" step="1000" inputmode="numeric"></label>
+          <label>סיכון לעסקה %<input type="number" id="vRiskIn" step="0.25" min="0.1" inputmode="decimal"></label>
+        </div>
+      </div>
+      <div class="ladder" id="vLadder"></div>
+      <div class="vision-engine" id="vEngine"></div>
+    </div>
   </div>
 
 </div>
@@ -997,6 +1032,13 @@ const pad2 = n => String(n).padStart(2,"0");
 function timerStartRun(){ if(!timer.running){ timer.running=true; timer.runStart=Date.now(); } }
 function timerPauseRun(){ if(timer.running){ timer.usedSec=(timer.usedSec||0)+(Date.now()-(timer.runStart||Date.now()))/1000; timer.running=false; timer.runStart=null; } }
 function timerEffUsed(){ return (timer.usedSec||0) + (timer.running&&timer.runStart?(Date.now()-timer.runStart)/1000:0); }
+
+/* ---------- vision (moonshot) ---------- */
+let vision = {goal:100000000, start:10000, risk:1};
+const VISION_KEY = "nasdaq_vision_v1";
+function loadVision(){ try{ const v=JSON.parse(Store.get(VISION_KEY)||"null"); if(v && typeof v==="object") vision={...vision,...v}; }catch(e){} }
+function saveVision(){ Store.set(VISION_KEY, JSON.stringify(vision)); }
+function fmtShort(n){ if(n>=1e9) return (n/1e9)+"B"; if(n>=1e6) return (n/1e6)+"M"; if(n>=1e3) return (n/1e3)+"K"; return ""+n; }
 
 /* ---------- accounts (nostro) ---------- */
 let accounts = [];
@@ -1719,6 +1761,7 @@ function simulate(pnls, start, horizon, sims){
 function renderForecast(){
   const svg=$("#forecastChart"); if(!svg) return;
   if(!$("#view-forecast").classList.contains("active")) return;
+  renderVision();
   const closed=getClosed();
   const pnls=closed.map(pnlOf);
   const start=pnls.reduce((a,b)=>a+b,0);
@@ -1774,6 +1817,46 @@ function renderForecast(){
       ? `אם תיכנס <b style="color:var(--amber)">רק כשאתה רגוע ולפי הכללים</b>, התרחיש החציוני שלך הוא <b class="pos">${sign(cleanMed)+fmtMoney(cleanMed)}</b> — לעומת <b class="${clsPN(medEnd-start)}">${sign(medEnd)+fmtMoney(medEnd)}</b> כפי שאתה סוחר היום.<br><br>הדחפים עולים לך בערך <b class="neg">${fmtMoney(Math.abs(gap))}</b> על פני ${horizon} העסקאות הבאות. <b>זה המחיר של חוסר משמעת — בדולרים, בעתיד.</b>`
       : `המשמעת שלך כבר חזקה — העסקאות ה"נקיות" שלך לא שונות מהותית מהשאר. תמשיך ככה, זה נדיר.`;
   } else { gp.style.display="none"; }
+}
+
+function renderVision(){
+  if(!$("#vGoalIn")) return;
+  $("#vGoalIn").value=vision.goal;
+  $("#vStartIn").value=vision.start;
+  $("#vRiskIn").value=vision.risk;
+  const closed=getClosed();
+  const cleanR=closed.filter(tradeClean).map(rOf).filter(r=>r!=null);
+  let eR = cleanR.length>=4 ? cleanR.reduce((a,b)=>a+b,0)/cleanR.length : null;
+  let aspirational=false;
+  if(eR==null || eR<=0.02){ eR=0.30; aspirational=true; }
+  const risk=vision.risk>0?vision.risk:1;
+  const g=(risk/100)*eR;                                  // account growth per trade
+  const days=new Set(closed.map(t=>dayKey(t.date)));
+  const tpd = (closed.length && days.size) ? closed.length/days.size : 3;
+  const tpy = Math.max(1, tpd*252);
+  const start=vision.start>0?vision.start:10000;
+  const goal=vision.goal>start?vision.goal:start*100;
+  const nToGoal=Math.log(goal/start)/Math.log(1+g);
+  const yearsToGoal=nToGoal/tpy;
+  $("#vGoal").textContent="$"+Math.round(goal).toLocaleString("en-US");
+  const etaYear=new Date().getFullYear()+yearsToGoal;
+  $("#vEta").innerHTML = `הגעה משוערת: <b>${yearsToGoal<300?Math.round(etaYear):"—"}</b> · בעוד <b>${yearsToGoal<300?yearsToGoal.toFixed(1):"∞"}</b> שנים · ~<b>${nToGoal<1e7?Math.round(nToGoal).toLocaleString("en-US"):"∞"}</b> עסקאות`;
+  const curEq=start+closed.reduce((a,t)=>a+pnlOf(t),0);
+  let tiers=[10e3,50e3,100e3,250e3,500e3,1e6,5e6,10e6,50e6,100e6,goal].filter((m,i,a)=>m>start && m<=goal && a.indexOf(m)===i).sort((a,b)=>a-b);
+  $("#vLadder").innerHTML=tiers.map(m=>{
+    const n=Math.log(m/start)/Math.log(1+g), yr=n/tpy;
+    const done=curEq>=m, prog=Math.min(100,curEq/m*100);
+    return `<div class="rung ${done?'done':''}">
+      <div class="rung-fill" style="width:${prog.toFixed(1)}%"></div>
+      <div class="rtick">${done?'✅':'🎯'}</div>
+      <div class="ramt">$${fmtShort(m)}</div>
+      <div class="reta">${done?'הושג ✓':('~'+yr.toFixed(1)+'y · '+Math.round(n).toLocaleString("en-US")+' trades')}</div>
+    </div>`;
+  }).join("");
+  $("#vEngine").innerHTML = `<b>המנוע:</b> תוחלת <b>${eR.toFixed(2)}R</b> לעסקה × סיכון <b>${risk}%</b> = החשבון גדל בכ‑<b>${(g*100).toFixed(2)}%</b> בכל עסקה. הפוזיציה גדלה יחד עם החשבון — זו ריבית דריבית, וזה מה שהופך אלפי דולרים למיליונים.`
+    + (aspirational
+      ? `<br><br>⚠️ עדיין אין מספיק עסקאות נקיות עם סטופ כדי למדוד את התוחלת שלך — <b>${eR.toFixed(2)}R</b> הוא יעד משמעת ריאלי לגמרי. תהיה ממושמע, והמנוע נדלק.`
+      : `<br><br>הקצה הזה הוא הדלק שלך — אבל רק על הקו הזהב. <b>דחף אחד גדול מאפס את ריבית הדריבית ומוחק שנים.</b> החזון הזה בנוי על משמעת, לא על מזל.`);
 }
 
 /* ---------- discipline guard (live, in modal) ---------- */
@@ -2183,6 +2266,9 @@ $("#tmNotify").onclick=requestNotify;
 $("#timerFab").onclick=toggleRun;
 ["fAccount","fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
 $("#fcHorizon").onchange=renderForecast;
+$("#vGoalIn").onchange=()=>{ vision.goal=Math.max(1000,parseFloat($("#vGoalIn").value)||100000000); saveVision(); renderVision(); };
+$("#vStartIn").onchange=()=>{ vision.start=Math.max(100,parseFloat($("#vStartIn").value)||10000); saveVision(); renderVision(); };
+$("#vRiskIn").onchange=()=>{ vision.risk=Math.max(0.1,Math.min(20,parseFloat($("#vRiskIn").value)||1)); saveVision(); renderVision(); };
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
@@ -2198,6 +2284,7 @@ load();
 migrateAccounts();
 loadRules();
 loadTimer();
+loadVision();
 buildAccountOptions();
 syncTimerInputs();
 paintEmotion();
