@@ -251,6 +251,36 @@ tbody tr:last-child td{border-bottom:none}
 .mini .l{font-size:11.5px;color:var(--muted);margin-bottom:5px}
 .mini .v{font-size:19px;font-weight:700;font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate}
 
+/* ===== Rules / Iron rules ===== */
+.rules-list{display:flex;flex-direction:column;gap:10px}
+.rule-item{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:12px 14px}
+.rule-item .rnum{width:26px;height:26px;flex:0 0 26px;border-radius:8px;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;background:linear-gradient(135deg,#1a2236,#0e1320);border:1px solid var(--line2);color:var(--amber)}
+.rule-item .rtext{flex:1;font-size:14px;line-height:1.45;font-weight:500}
+.rule-item .rtext[contenteditable="true"]:focus{outline:none;border-bottom:1px dashed var(--line2)}
+.rule-item .rdel{width:30px;height:30px;flex:0 0 auto;border-radius:8px;display:grid;place-items:center;color:var(--muted);border:1px solid transparent}
+.rule-item .rdel:hover{color:var(--red);border-color:var(--red-dim);background:var(--bg)}
+.rule-add{display:flex;gap:10px;margin-top:14px}
+.rule-add input{flex:1;background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:11px 13px;border-radius:10px;outline:none}
+.rule-add input:focus{border-color:var(--blue)}
+.rule-check{display:flex;flex-direction:column;gap:8px}
+.rule-check label{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:9px 12px;font-size:13.5px;cursor:pointer;transition:.12s;font-weight:500}
+.rule-check label:hover{border-color:var(--faint)}
+.rule-check input{width:18px;height:18px;flex:0 0 auto;accent-color:var(--amber);cursor:pointer}
+.rule-check .none{color:var(--faint);font-size:13px}
+
+/* ===== Day detail ===== */
+#overlay{z-index:110}
+.cal-cell.has{cursor:pointer}
+.day-trade{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--line)}
+.day-trade:last-child{border-bottom:none}
+.day-trade .dt-time{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted)}
+.day-trade .dt-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.day-trade .dt-sub{font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.day-trade .dt-pnl{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate;font-weight:700;font-size:14px;text-align:left}
+.day-empty{text-align:center;color:var(--muted);padding:30px 10px;font-size:14px}
+.day-total{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;padding:2px 0 14px}
+.day-total b{font-family:'JetBrains Mono',monospace}
+
 @media(max-width:820px){
   .kpis{grid-template-columns:1fr 1fr}
   .kpi.hero{grid-column:span 2}
@@ -307,6 +337,7 @@ tbody tr:last-child td{border-bottom:none}
   <button class="tab" data-view="trades">עסקאות</button>
   <button class="tab" data-view="analytics">אנליטיקה</button>
   <button class="tab" data-view="psych">פסיכולוגיה</button>
+  <button class="tab" data-view="rules">כללי ברזל</button>
 </div>
 
 <div class="wrap">
@@ -407,6 +438,21 @@ tbody tr:last-child td{border-bottom:none}
     </div>
   </div>
 
+  <!-- ============ RULES ============ -->
+  <div class="view" id="view-rules">
+    <div class="panel">
+      <div class="panel-h">
+        <h3>כללי הברזל שלי</h3>
+        <span class="hint">החוקים שאני לא עובר עליהם — לעולם</span>
+      </div>
+      <div class="rules-list" id="rulesList"></div>
+      <div class="rule-add">
+        <input type="text" id="ruleInput" placeholder="כתוב כלל חדש… (לדוגמה: לא יותר מ‑3 עסקאות ביום)" maxlength="160">
+        <button class="btn btn-primary" id="ruleAddBtn">הוסף כלל</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- ============ MODAL ============ -->
@@ -502,6 +548,11 @@ tbody tr:last-child td{border-bottom:none}
           <div class="chips" id="mistakeChips"></div>
         </div>
 
+        <div class="field full" id="ruleCheckField">
+          <label>צ׳ק־ליסט כללי הברזל — לפני שמירה</label>
+          <div class="rule-check" id="ruleChecklist"></div>
+        </div>
+
         <div class="field full">
           <label>הערות ותובנות</label>
           <textarea id="fldNotes" placeholder="מה ראיתי? מה הרגשתי? מה אעשה אחרת בפעם הבאה?"></textarea>
@@ -516,6 +567,27 @@ tbody tr:last-child td{border-bottom:none}
     <div class="modal-f">
       <button class="btn btn-ghost" id="modalCancel">ביטול</button>
       <button class="btn btn-primary" id="modalSave">שמירת עסקה</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DAY DETAIL MODAL ============ -->
+<div class="overlay" id="dayOverlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-h">
+      <div class="cal-nav">
+        <button id="dayPrev" title="יום קודם"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+        <h2 id="dayTitle" style="font-size:16px;min-width:170px;text-align:center"></h2>
+        <button id="dayNext" title="יום הבא"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      </div>
+      <button id="dayClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-b">
+      <div class="day-total" id="dayTotal"></div>
+      <div id="dayTrades"></div>
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-primary" id="dayAdd">+ עסקה ביום זה</button>
     </div>
   </div>
 </div>
@@ -555,14 +627,33 @@ const MISTAKES = ["כניסה מוקדמת","רדיפת מחיר","ללא סטו
 /* ---------- state ---------- */
 let trades = [];
 let editingId = null;
-let draftDir = "long", draftMistakes = new Set(), draftRating = 0;
+let draftDir = "long", draftMistakes = new Set(), draftRating = 0, draftRules = new Set();
 let calDate = new Date();
+let currentDayKey = null;
+
+let rules = [];
+const RULES_KEY = "nasdaq_rules_v1";
+const DEFAULT_RULES = [
+  "לא נכנס לעסקה בלי סטופ‑לוס מוגדר מראש",
+  "מקסימום 3 עסקאות ביום",
+  "מפסיק לסחור אחרי 2 הפסדים רצופים",
+  "לא מזיז סטופ נגד הפוזיציה",
+  "לא נכנס מתוך FOMO או נקמה",
+  "סיכון מקסימלי לעסקה: 1% מהחשבון"
+];
 
 function load(){
   try { trades = JSON.parse(Store.get(KEY) || "[]"); if(!Array.isArray(trades)) trades=[]; }
   catch(e){ trades = []; }
 }
 function save(){ Store.set(KEY, JSON.stringify(trades)); }
+function loadRules(){
+  let r=null;
+  try { r = JSON.parse(Store.get(RULES_KEY) || "null"); } catch(e){}
+  if(!Array.isArray(r) || !r.length){ rules = DEFAULT_RULES.map(text=>({id:uid(),text})); saveRules(); }
+  else rules = r.filter(x=>x && typeof x.text==="string");
+}
+function saveRules(){ Store.set(RULES_KEY, JSON.stringify(rules)); }
 
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
@@ -717,18 +808,19 @@ function renderCalendar(){
   let mTotal=0, mTrades=0, green=0, redd=0;
   for(let d=1;d<=days;d++){
     const v=byDay[d];
+    const dk=y+"-"+String(m+1).padStart(2,"0")+"-"+String(d).padStart(2,"0");
     if(v){
       mTotal+=v.pnl; mTrades+=v.n; if(v.pnl>0)green++; else if(v.pnl<0)redd++;
       const intensity=Math.min(1,Math.abs(v.pnl)/maxAbs);
       const op=(0.12+intensity*0.55).toFixed(2);
       const col=v.pnl>=0?`52,211,153`:`251,110,114`;
-      html+=`<div class="cal-cell has" style="background:rgba(${col},${op});border-color:rgba(${col},.4)">
+      html+=`<div class="cal-cell has" onclick="openDay('${dk}')" style="background:rgba(${col},${op});border-color:rgba(${col},.4)">
         <div class="d">${d}</div>
         <div class="p ${clsPN(v.pnl)}" style="color:#fff">${sign(v.pnl)+fmtMoney(v.pnl)}</div>
         <div class="c" style="color:rgba(255,255,255,.65)">${v.n} עסק׳</div>
       </div>`;
     } else {
-      html+=`<div class="cal-cell"><div class="d">${d}</div></div>`;
+      html+=`<div class="cal-cell has" onclick="openDay('${dk}')"><div class="d">${d}</div></div>`;
     }
   }
   $("#calGrid").innerHTML=html;
@@ -737,6 +829,89 @@ function renderCalendar(){
     <span class="dim">${mTrades} עסקאות</span>
     <span class="pos">${green} ימים ירוקים</span>
     <span class="neg">${redd} ימים אדומים</span>`;
+}
+
+/* ---------- day detail ---------- */
+function openDay(dayStr){
+  currentDayKey=dayStr;
+  renderDay();
+  $("#dayOverlay").classList.add("open");
+  document.body.style.overflow="hidden";
+}
+function closeDay(){
+  $("#dayOverlay").classList.remove("open");
+  currentDayKey=null;
+  if(!$("#overlay").classList.contains("open")) document.body.style.overflow="";
+}
+function shiftDay(delta){
+  if(!currentDayKey) return;
+  const d=new Date(currentDayKey+"T00:00:00");
+  d.setDate(d.getDate()+delta);
+  currentDayKey=dayKey(d.toISOString());
+  renderDay();
+}
+function renderDay(){
+  if(!currentDayKey) return;
+  const list=getFiltered().filter(t=>dayKey(t.date)===currentDayKey).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const d=new Date(currentDayKey+"T00:00:00");
+  const dowNames=["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"];
+  $("#dayTitle").textContent=dowNames[d.getDay()]+" · "+String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();
+  const net=list.reduce((a,t)=>a+pnlOf(t),0);
+  const wins=list.filter(t=>pnlOf(t)>0).length;
+  $("#dayTotal").innerHTML=list.length?`
+    <span>סה״כ יומי: <b class="${clsPN(net)}">${sign(net)+fmtMoney2(net)}</b></span>
+    <span class="dim">${list.length} עסקאות</span>
+    <span class="pos">${wins}W</span>
+    <span class="neg">${list.length-wins}L</span>`:"";
+  const el=$("#dayTrades");
+  if(!list.length){ el.innerHTML=`<div class="day-empty">אין עסקאות ביום הזה.</div>`; return; }
+  el.innerHTML=list.map(t=>{
+    const p=pnlOf(t), r=rOf(t), dt=new Date(t.date);
+    const tm=String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0");
+    const sub=`${t.entry} → ${t.exit}`+(t.setup?" · "+escapeHtml(t.setup):"")+(r!=null?" · "+sign(r)+r.toFixed(2)+"R":"");
+    return `<div class="day-trade">
+      <div class="dt-time">${tm}</div>
+      <div class="dt-main">
+        <div><span class="dir-${t.direction}">${t.direction==="long"?"לונג":"שורט"}</span> <span class="num" style="font-weight:600">${escapeHtml(t.instrument)}</span> <span class="num dim">×${t.contracts}</span></div>
+        <div class="dt-sub">${sub}</div>
+      </div>
+      <div class="dt-pnl ${clsPN(p)}">${sign(p)+fmtMoney2(p)}</div>
+      <div class="row-act">
+        <button onclick="openModal('${t.id}')" title="עריכה"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+        <button class="del" onclick="delTrade('${t.id}')" title="מחיקה"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ---------- iron rules ---------- */
+function renderRules(){
+  const el=$("#rulesList"); if(!el) return;
+  if(!rules.length){ el.innerHTML=`<div class="day-empty">עדיין לא הגדרת כללים. כתוב את כלל הברזל הראשון שלך למטה.</div>`; return; }
+  el.innerHTML=rules.map((r,i)=>`
+    <div class="rule-item">
+      <div class="rnum">${i+1}</div>
+      <div class="rtext" contenteditable="true" spellcheck="false" data-id="${r.id}">${escapeHtml(r.text)}</div>
+      <button class="rdel" data-id="${r.id}" title="מחק כלל"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+    </div>`).join("");
+  $$("#rulesList .rtext").forEach(node=>{
+    node.addEventListener("blur",()=>{ const r=rules.find(x=>x.id===node.dataset.id); if(!r) return; const v=node.textContent.trim(); if(v){ r.text=v; saveRules(); } else { node.textContent=r.text; } });
+    node.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); node.blur(); } });
+  });
+  $$("#rulesList .rdel").forEach(b=>b.onclick=()=>{ if(confirm("למחוק את הכלל?")){ rules=rules.filter(x=>x.id!==b.dataset.id); saveRules(); renderRules(); } });
+}
+function addRule(){
+  const inp=$("#ruleInput"); const v=inp.value.trim(); if(!v) return;
+  rules.push({id:uid(),text:v}); saveRules(); inp.value=""; renderRules();
+}
+function buildRuleChecklist(){
+  const el=$("#ruleChecklist"); if(!el) return;
+  if(!rules.length){ el.innerHTML=`<div class="none">לא הוגדרו כללים. אפשר להגדיר בלשונית «כללי ברזל».</div>`; return; }
+  el.innerHTML=rules.map(r=>`<label><input type="checkbox" data-id="${r.id}"><span>${escapeHtml(r.text)}</span></label>`).join("");
+  $$("#ruleChecklist input").forEach(c=>{
+    c.checked=draftRules.has(c.dataset.id);
+    c.onchange=()=>{ if(c.checked) draftRules.add(c.dataset.id); else draftRules.delete(c.dataset.id); };
+  });
 }
 
 /* ---------- bar breakdown ---------- */
@@ -752,7 +927,7 @@ function renderBars(el, rows){
     const w=(Math.abs(r.pnl)/maxAbs*100).toFixed(1);
     const col=r.pnl>=0?"var(--green)":"var(--red)";
     return `<div class="bar-row">
-      <div class="name" title="${r.name}">${r.name}</div>
+      <div class="name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</div>
       <div class="bar-track"><div class="bar-fill" style="width:${w}%;background:${col};opacity:.85;right:0"></div></div>
       <div class="v ${clsPN(r.pnl)}">${sign(r.pnl)+fmtMoney(r.pnl)}<span class="dim" style="font-size:10px;margin-inline-start:5px">${r.wr.toFixed(0)}%</span></div>
     </div>`;
@@ -810,7 +985,7 @@ function renderTrades(){
       <td><span class="num dim">${t.entry}</span> → <span class="num dim">${t.exit}</span></td>
       <td><span class="num ${clsPN(p)}" style="font-weight:700">${sign(p)+fmtMoney2(p)}</span></td>
       <td><span class="num ${r!=null?clsPN(r):'dim'}">${r!=null?(sign(r)+r.toFixed(2)+"R"):"—"}</span></td>
-      <td>${t.setup?`<span class="tag">${t.setup}</span>`:'<span class="dim">—</span>'}</td>
+      <td>${t.setup?`<span class="tag">${escapeHtml(t.setup)}</span>`:'<span class="dim">—</span>'}</td>
       <td><span class="dim" style="font-size:12px">${t.session||"—"}</span></td>
       <td><span style="color:var(--amber);font-size:12px">${stars||""}</span></td>
       <td><div class="row-act">
@@ -853,8 +1028,12 @@ function renderPsych(){
   const offPlan=list.filter(t=>t.plan==="no");
   const planNet=planTrades.reduce((a,t)=>a+pnlOf(t),0);
   const offNet=offPlan.reduce((a,t)=>a+pnlOf(t),0);
+  const rated=list.filter(t=>t.rulesTotal>0);
+  const fullCompliant=rated.filter(t=>(t.rulesOK||[]).length>=t.rulesTotal).length;
+  const ruleScore=rated.length? fullCompliant/rated.length*100 : null;
   $("#psStats").innerHTML=`
     <div class="mini"><div class="l">ציון משמעת</div><div class="v ${s.discipline>=70?'pos':(s.discipline<50&&s.n?'neg':'')}">${s.discipline.toFixed(0)}%</div></div>
+    <div class="mini"><div class="l">עמידה בכללי הברזל</div><div class="v ${ruleScore==null?'':(ruleScore>=70?'pos':(ruleScore<50?'neg':''))}">${ruleScore==null?'—':ruleScore.toFixed(0)+'%'}</div></div>
     <div class="mini"><div class="l">P&L כשפעלתי לפי התוכנית</div><div class="v ${clsPN(planNet)}">${sign(planNet)+fmtMoney(planNet)}</div></div>
     <div class="mini"><div class="l">P&L כשסטיתי מהתוכנית</div><div class="v ${clsPN(offNet)}">${sign(offNet)+fmtMoney(offNet)}</div></div>`;
   renderBars($("#byEmotion"), barBreakdown(list,t=>t.emoBefore));
@@ -868,7 +1047,7 @@ function renderPsych(){
     $("#byMistake").innerHTML=mrows.map(r=>{
       const w=(Math.abs(r.pnl)/maxAbs*100).toFixed(1);
       return `<div class="bar-row">
-        <div class="name" title="${r.name}">${r.name}</div>
+        <div class="name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${w}%;background:var(--red);opacity:.8;right:0"></div></div>
         <div class="v ${clsPN(r.pnl)}">${sign(r.pnl)+fmtMoney(r.pnl)} <span class="dim" style="font-size:10px">×${r.n}</span></div>
       </div>`;
@@ -889,7 +1068,7 @@ function renderPsych(){
     </div>`;
   }).join("");
 }
-function escapeHtml(s){ return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 /* ---------- master render ---------- */
 function renderAll(){
@@ -901,6 +1080,8 @@ function renderAll(){
   renderTrades();
   renderAnalytics();
   renderPsych();
+  renderRules();
+  if($("#dayOverlay").classList.contains("open")) renderDay();
   populateFilterOptions();
 }
 
@@ -908,7 +1089,7 @@ function renderAll(){
 function populateFilterOptions(){
   const setups=[...new Set(trades.map(t=>t.setup).filter(Boolean))];
   const sel=$("#fSetup"), cur=sel.value;
-  sel.innerHTML=`<option value="">הכל</option>`+setups.map(x=>`<option>${x}</option>`).join("");
+  sel.innerHTML=`<option value="">הכל</option>`+setups.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");
   sel.value=cur;
 }
 
@@ -947,9 +1128,9 @@ function liveCalc(){
   else { const risk=riskOf({instrument:inst,entry,stop,contracts}); $("#lcRisk").textContent= risk?("-"+fmtMoney2(risk)):"—"; $("#lcRisk").className="v neg"; }
 }
 
-function openModal(id){
+function openModal(id, prefillDate){
   editingId=id||null;
-  draftMistakes=new Set(); draftRating=0;
+  draftMistakes=new Set(); draftRating=0; draftRules=new Set();
   $("#modalTitle").textContent= id?"עריכת עסקה":"עסקה חדשה";
   $$("#mistakeChips .chip").forEach(c=>c.classList.remove("on"));
   if(id){
@@ -968,20 +1149,22 @@ function openModal(id){
     setDir(t.direction);
     (t.mistakes||[]).forEach(m=>{ draftMistakes.add(m); const c=document.querySelector(`#mistakeChips .chip[data-m="${m}"]`); if(c)c.classList.add("on"); });
     draftRating=t.rating||0;
+    draftRules=new Set(t.rulesOK||[]);
   } else {
-    $("#fldDate").value=toLocalInput(new Date().toISOString());
+    $("#fldDate").value=toLocalInput(prefillDate?dayAtNow(prefillDate):new Date().toISOString());
     $("#fldInstrument").value="NQ"; $("#fldContracts").value=1;
     $("#fldEntry").value=""; $("#fldExit").value=""; $("#fldStop").value=""; $("#fldTarget").value="";
     $("#fldFees").value=0; $("#fldSession").value="פתיחה (Open)"; $("#fldSetup").value="";
     $("#fldEmoBefore").value="רגוע"; $("#fldPlan").value="yes"; $("#fldNotes").value="";
     setDir("long");
   }
-  paintStars(); liveCalc();
+  paintStars(); buildRuleChecklist(); liveCalc();
   $("#overlay").classList.add("open");
   document.body.style.overflow="hidden";
 }
-function closeModal(){ $("#overlay").classList.remove("open"); document.body.style.overflow=""; }
+function closeModal(){ $("#overlay").classList.remove("open"); document.body.style.overflow= $("#dayOverlay").classList.contains("open")?"hidden":""; }
 function toLocalInput(iso){ const d=new Date(iso); const off=d.getTimezoneOffset(); const local=new Date(d.getTime()-off*60000); return local.toISOString().slice(0,16); }
+function dayAtNow(dayStr){ const now=new Date(); const d=new Date(dayStr+"T00:00:00"); d.setHours(now.getHours(),now.getMinutes(),0,0); return d.toISOString(); }
 
 function saveTrade(){
   const entry=parseFloat($("#fldEntry").value), exit=parseFloat($("#fldExit").value);
@@ -1002,6 +1185,8 @@ function saveTrade(){
     emoBefore: $("#fldEmoBefore").value,
     plan: $("#fldPlan").value,
     mistakes: [...draftMistakes],
+    rulesOK: [...draftRules],
+    rulesTotal: rules.length,
     notes: $("#fldNotes").value.trim(),
     rating: draftRating
   };
@@ -1057,11 +1242,18 @@ $("#btnImport").onclick=()=>$("#importFile").click();
 $("#importFile").onchange=e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=""; };
 $("#calPrev").onclick=()=>{ calDate.setMonth(calDate.getMonth()-1); renderCalendar(); };
 $("#calNext").onclick=()=>{ calDate.setMonth(calDate.getMonth()+1); renderCalendar(); };
+$("#dayClose").onclick=closeDay;
+$("#dayOverlay").onclick=e=>{ if(e.target.id==="dayOverlay") closeDay(); };
+$("#dayPrev").onclick=()=>shiftDay(-1);
+$("#dayNext").onclick=()=>shiftDay(1);
+$("#dayAdd").onclick=()=>{ if(currentDayKey) openModal(null,currentDayKey); };
+$("#ruleAddBtn").onclick=addRule;
+$("#ruleInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addRule(); } });
 ["fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape") closeModal();
-  if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA") openModal();
+  if(e.key==="Escape"){ if($("#overlay").classList.contains("open")) closeModal(); else if($("#dayOverlay").classList.contains("open")) closeDay(); }
+  if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && !$("#dayOverlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA" && document.activeElement.getAttribute("contenteditable")!=="true") openModal();
 });
 
 /* ---------- init ---------- */
@@ -1069,6 +1261,7 @@ buildInstrumentOptions();
 buildMistakeChips();
 buildStars();
 load();
+loadRules();
 renderAll();
 </script>
 </body>
