@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>יומן מסחר — NASDAQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0E18;
+  --bg2:#0E1320;
+  --panel:#141A2A;
+  --line:#222B40;
+  --line2:#2C374F;
+  --txt:#E8ECF4;
+  --muted:#8B95AC;
+  --faint:#5A647C;
+  --green:#34D399;
+  --green-dim:#1C7A5A;
+  --red:#FB6E72;
+  --red-dim:#8A3338;
+  --amber:#E8B84B;
+  --blue:#5B8DEF;
+  --violet:#9C7BF0;
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:
+    radial-gradient(1200px 600px at 100% -10%, rgba(91,141,239,.08), transparent 60%),
+    radial-gradient(1000px 500px at 0% 0%, rgba(232,184,75,.05), transparent 55%),
+    var(--bg);
+  color:var(--txt);
+  font-family:'Heebo',system-ui,sans-serif;
+  font-size:15px;
+  line-height:1.5;
+  min-height:100%;
+  padding-bottom:40px;
+}
+.num{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate;font-feature-settings:"tnum"}
+.pos{color:var(--green)}
+.neg{color:var(--red)}
+.dim{color:var(--muted)}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:15px}
+a{color:var(--blue);text-decoration:none}
+
+/* ===== Top bar ===== */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  background:linear-gradient(180deg, rgba(10,14,24,.96), rgba(10,14,24,.82));
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+  padding:14px 18px;
+}
+.topbar-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px}
+.logo{
+  width:38px;height:38px;border-radius:10px;display:grid;place-items:center;
+  background:linear-gradient(135deg,#1a2236,#0e1320);
+  border:1px solid var(--line2);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+}
+.logo svg{width:22px;height:22px}
+.brand h1{font-size:17px;font-weight:700;letter-spacing:-.2px;line-height:1.1}
+.brand .sub{font-size:11px;color:var(--faint);font-family:'JetBrains Mono',monospace;letter-spacing:1px}
+.topbar .spacer{flex:1}
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:9px 15px;border-radius:10px;font-weight:600;font-size:14px;
+  border:1px solid var(--line2);background:var(--panel);transition:.15s;
+}
+.btn:hover{border-color:var(--faint);background:#1a2236}
+.btn svg{width:16px;height:16px}
+.btn-primary{
+  background:linear-gradient(135deg,#E8B84B,#D49A2A);color:#1a1405;border:none;
+  box-shadow:0 4px 14px rgba(232,184,75,.22);
+}
+.btn-primary:hover{filter:brightness(1.06);background:linear-gradient(135deg,#E8B84B,#D49A2A)}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn-ghost:hover{background:var(--panel);color:var(--txt)}
+
+/* ===== Tabs ===== */
+.tabs{max-width:1180px;margin:0 auto;padding:0 18px;display:flex;gap:4px;border-bottom:1px solid var(--line);position:sticky;top:67px;z-index:30;background:var(--bg)}
+.tab{
+  padding:13px 16px;font-weight:600;font-size:14px;color:var(--muted);
+  border-bottom:2px solid transparent;margin-bottom:-1px;transition:.15s;white-space:nowrap;
+}
+.tab:hover{color:var(--txt)}
+.tab.active{color:var(--amber);border-bottom-color:var(--amber)}
+
+/* ===== Layout ===== */
+.wrap{max-width:1180px;margin:0 auto;padding:22px 18px}
+.view{display:none}
+.view.active{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ===== Filter bar ===== */
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:center}
+.filters select, .filters input{
+  background:var(--panel);border:1px solid var(--line2);color:var(--txt);
+  padding:8px 11px;border-radius:9px;outline:none;
+}
+.filters select:focus,.filters input:focus{border-color:var(--blue)}
+.filters label{font-size:12px;color:var(--faint);margin-inline-end:-4px}
+.chip-clear{font-size:12px;color:var(--blue);padding:6px 4px}
+
+/* ===== KPI grid ===== */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:18px}
+.kpi{
+  background:linear-gradient(160deg,var(--panel),#10162400);
+  background-color:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;position:relative;overflow:hidden;
+}
+.kpi::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:var(--line2);opacity:.6}
+.kpi .label{font-size:11.5px;color:var(--muted);font-weight:500;letter-spacing:.3px;margin-bottom:7px}
+.kpi .val{font-size:26px;font-weight:700;font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate;line-height:1}
+.kpi .meta{font-size:11.5px;color:var(--faint);margin-top:6px;font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate}
+.kpi.hero{grid-column:span 2}
+.kpi.hero .val{font-size:34px}
+
+/* ===== Panels ===== */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:18px}
+.panel-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.panel-h h3{font-size:15px;font-weight:700}
+.panel-h .hint{font-size:12px;color:var(--faint)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid-2>.panel{margin-bottom:0}
+
+/* ===== Equity curve ===== */
+.chart-wrap{width:100%;position:relative}
+svg.chart{width:100%;display:block}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:8px;flex-wrap:wrap}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-inline-end:5px;vertical-align:middle}
+
+/* ===== Calendar ===== */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cal-nav{display:flex;align-items:center;gap:6px}
+.cal-nav button{width:32px;height:32px;border-radius:9px;border:1px solid var(--line2);background:var(--bg2);display:grid;place-items:center}
+.cal-nav button:hover{border-color:var(--faint)}
+.cal-month{font-weight:700;font-size:15px;min-width:120px;text-align:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-dow{font-size:11px;color:var(--faint);text-align:center;font-weight:600;padding-bottom:2px}
+.cal-cell{
+  aspect-ratio:1;border-radius:9px;border:1px solid var(--line);
+  padding:6px;display:flex;flex-direction:column;justify-content:space-between;
+  background:var(--bg2);position:relative;overflow:hidden;min-height:54px;transition:.12s;
+}
+.cal-cell.empty{background:transparent;border-color:transparent}
+.cal-cell.has:hover{transform:translateY(-2px);border-color:var(--faint)}
+.cal-cell .d{font-size:11px;color:var(--muted);font-weight:600}
+.cal-cell .p{font-size:12.5px;font-weight:700;font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate}
+.cal-cell .c{font-size:9.5px;color:var(--faint)}
+.cal-summary{display:flex;gap:18px;margin-top:14px;flex-wrap:wrap;font-size:13px}
+.cal-summary b{font-family:'JetBrains Mono',monospace}
+
+/* ===== Bars ===== */
+.bars{display:flex;flex-direction:column;gap:10px}
+.bar-row{display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;font-size:13px}
+.bar-row .name{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{height:22px;background:var(--bg2);border-radius:6px;position:relative;overflow:hidden}
+.bar-fill{position:absolute;top:0;bottom:0;border-radius:6px;transition:width .4s ease}
+.bar-row .v{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate;font-size:12.5px;min-width:64px;text-align:left;font-weight:600}
+
+/* R histogram */
+.hist{display:flex;align-items:flex-end;gap:6px;height:150px;padding-top:10px}
+.hist-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.hist-bar{width:100%;border-radius:5px 5px 2px 2px;min-height:2px;transition:height .4s}
+.hist-lbl{font-size:10px;color:var(--faint);font-family:'JetBrains Mono',monospace}
+.hist-cnt{font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace}
+
+/* ===== Trades table ===== */
+.table-scroll{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:760px}
+thead th{
+  text-align:right;padding:11px 12px;font-size:11.5px;color:var(--muted);font-weight:600;
+  background:var(--bg2);border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;
+}
+tbody td{padding:11px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+tbody tr{transition:.1s}
+tbody tr:hover{background:#161d2e}
+tbody tr:last-child td{border-bottom:none}
+.tag{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;background:var(--bg2);border:1px solid var(--line2);color:var(--muted)}
+.dir-long{color:var(--green);font-weight:700}
+.dir-short{color:var(--red);font-weight:700}
+.row-act{display:flex;gap:4px}
+.row-act button{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--muted);border:1px solid transparent}
+.row-act button:hover{background:var(--bg2);border-color:var(--line2);color:var(--txt)}
+.row-act button.del:hover{color:var(--red);border-color:var(--red-dim)}
+
+/* ===== Empty state ===== */
+.empty{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty svg{width:54px;height:54px;opacity:.4;margin-bottom:14px}
+.empty h3{font-size:18px;color:var(--txt);margin-bottom:6px}
+.empty p{font-size:14px;margin-bottom:18px}
+
+/* ===== Modal ===== */
+.overlay{position:fixed;inset:0;background:rgba(4,7,14,.72);backdrop-filter:blur(4px);z-index:100;display:none;align-items:flex-start;justify-content:center;padding:24px 14px;overflow-y:auto}
+.overlay.open{display:flex}
+.modal{
+  background:var(--bg2);border:1px solid var(--line2);border-radius:18px;
+  width:100%;max-width:680px;box-shadow:0 30px 80px rgba(0,0,0,.5);margin:auto;
+  animation:pop .2s ease;
+}
+@keyframes pop{from{opacity:0;transform:scale(.97) translateY(8px)}to{opacity:1;transform:none}}
+.modal-h{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line)}
+.modal-h h2{font-size:18px;font-weight:700}
+.modal-h button{width:34px;height:34px;border-radius:9px;color:var(--muted);display:grid;place-items:center}
+.modal-h button:hover{background:var(--panel);color:var(--txt)}
+.modal-b{padding:20px 22px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field.full{grid-column:span 2}
+.field label{font-size:12.5px;color:var(--muted);font-weight:600}
+.field input,.field select,.field textarea{
+  background:var(--panel);border:1px solid var(--line2);color:var(--txt);
+  padding:10px 12px;border-radius:10px;outline:none;transition:.15s;width:100%;
+}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue);background:#161d2e}
+.field input.num{direction:ltr;text-align:left}
+.field textarea{resize:vertical;min-height:70px;line-height:1.5}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;padding:8px;border-radius:7px;font-weight:700;font-size:14px;color:var(--muted);transition:.12s}
+.seg button.on-long{background:var(--green-dim);color:#bbf7e0}
+.seg button.on-short{background:var(--red-dim);color:#ffd5d6}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{padding:6px 12px;border-radius:20px;border:1px solid var(--line2);background:var(--panel);font-size:12.5px;color:var(--muted);transition:.12s;font-weight:500}
+.chip.on{background:#2a2238;border-color:var(--violet);color:#e2d6ff}
+.live-calc{
+  grid-column:span 2;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;
+  background:linear-gradient(135deg,#10162a,#0c1120);border:1px solid var(--line2);border-radius:12px;padding:14px 16px;
+}
+.live-calc .lc{text-align:center}
+.live-calc .lc .l{font-size:11px;color:var(--faint);margin-bottom:4px}
+.live-calc .lc .v{font-size:21px;font-weight:700;font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate}
+.stars{display:flex;gap:4px}
+.stars button{font-size:22px;color:var(--line2);transition:.1s;line-height:1}
+.stars button.on{color:var(--amber)}
+.modal-f{padding:16px 22px;border-top:1px solid var(--line);display:flex;gap:10px;justify-content:flex-end}
+
+/* toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--panel);border:1px solid var(--line2);padding:12px 20px;border-radius:12px;font-weight:600;font-size:14px;opacity:0;transition:.25s;z-index:200;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* small */
+.sub-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:18px}
+.mini{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+.mini .l{font-size:11.5px;color:var(--muted);margin-bottom:5px}
+.mini .v{font-size:19px;font-weight:700;font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate}
+
+@media(max-width:820px){
+  .kpis{grid-template-columns:1fr 1fr}
+  .kpi.hero{grid-column:span 2}
+  .grid-2{grid-template-columns:1fr}
+  .grid-2>.panel{margin-bottom:18px}
+  .form-grid{grid-template-columns:1fr}
+  .field.full,.live-calc{grid-column:span 1}
+  .sub-stats{grid-template-columns:1fr}
+  .brand h1{font-size:15px}
+}
+@media(max-width:480px){
+  .kpis{grid-template-columns:1fr 1fr}
+  .kpi .val{font-size:22px}
+  .kpi.hero .val{font-size:28px}
+  .wrap{padding:16px 12px}
+  .topbar{padding:12px 14px}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#E8B84B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 17l5-5 4 3 6-7"/><path d="M16 7h3v3"/>
+        </svg>
+      </div>
+      <div>
+        <h1>יומן מסחר</h1>
+        <div class="sub">NASDAQ · NQ / MNQ</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" id="btnExport" title="ייצוא גיבוי">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+      גיבוי
+    </button>
+    <button class="btn btn-ghost" id="btnImport" title="שחזור מגיבוי">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+      שחזור
+    </button>
+    <button class="btn btn-primary" id="btnAdd">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      עסקה חדשה
+    </button>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-view="dash">לוח מחוונים</button>
+  <button class="tab" data-view="trades">עסקאות</button>
+  <button class="tab" data-view="analytics">אנליטיקה</button>
+  <button class="tab" data-view="psych">פסיכולוגיה</button>
+</div>
+
+<div class="wrap">
+
+  <!-- global filters -->
+  <div class="filters" id="filters">
+    <label>מכשיר</label>
+    <select id="fInstrument"><option value="">הכל</option></select>
+    <label>סשן</label>
+    <select id="fSession"><option value="">הכל</option></select>
+    <label>סטאפ</label>
+    <select id="fSetup"><option value="">הכל</option></select>
+    <label>טווח</label>
+    <select id="fRange">
+      <option value="all">הכל</option>
+      <option value="7">7 ימים</option>
+      <option value="30">30 ימים</option>
+      <option value="90">90 ימים</option>
+      <option value="ytd">השנה</option>
+    </select>
+    <button class="chip-clear" id="fClear">איפוס סינון</button>
+  </div>
+
+  <!-- ============ DASHBOARD ============ -->
+  <div class="view active" id="view-dash">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="panel">
+      <div class="panel-h"><h3>עקומת הון</h3><span class="hint" id="eqHint"></span></div>
+      <div class="chart-wrap"><svg class="chart" id="equityChart" viewBox="0 0 800 260" preserveAspectRatio="none"></svg></div>
+      <div class="legend">
+        <span><i style="background:var(--blue)"></i>הון מצטבר</span>
+        <span><i style="background:var(--red);opacity:.5"></i>דרודאון</span>
+        <span><i style="background:var(--line2)"></i>קו אפס</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="cal-head">
+        <h3 style="font-size:15px;font-weight:700">לוח רווח/הפסד</h3>
+        <div class="cal-nav">
+          <button id="calPrev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+          <span class="cal-month" id="calMonth"></span>
+          <button id="calNext"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+        </div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-summary" id="calSummary"></div>
+    </div>
+  </div>
+
+  <!-- ============ TRADES ============ -->
+  <div class="view" id="view-trades">
+    <div id="tradesContent"></div>
+  </div>
+
+  <!-- ============ ANALYTICS ============ -->
+  <div class="view" id="view-analytics">
+    <div class="sub-stats" id="anStats"></div>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-h"><h3>ביצועים לפי סשן</h3></div>
+        <div class="bars" id="bySession"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h"><h3>ביצועים לפי סטאפ</h3></div>
+        <div class="bars" id="bySetup"></div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:18px">
+      <div class="panel">
+        <div class="panel-h"><h3>ביצועים לפי יום בשבוע</h3></div>
+        <div class="bars" id="byDow"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h"><h3>פיזור R</h3><span class="hint">תוצאה ביחס לסיכון</span></div>
+        <div class="hist" id="rHist"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PSYCHOLOGY ============ -->
+  <div class="view" id="view-psych">
+    <div class="sub-stats" id="psStats"></div>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-h"><h3>P&L לפי רגש בכניסה</h3></div>
+        <div class="bars" id="byEmotion"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h"><h3>הטעויות שעולות לי הכי הרבה</h3></div>
+        <div class="bars" id="byMistake"></div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-h"><h3>תובנות אחרונות</h3></div>
+      <div id="recentNotes"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ MODAL ============ -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-h">
+      <h2 id="modalTitle">עסקה חדשה</h2>
+      <button id="modalClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-b">
+      <div class="form-grid">
+        <div class="field">
+          <label>תאריך ושעה</label>
+          <input type="datetime-local" id="fldDate">
+        </div>
+        <div class="field">
+          <label>כיוון</label>
+          <div class="seg">
+            <button type="button" data-dir="long" id="dirLong">לונג</button>
+            <button type="button" data-dir="short" id="dirShort">שורט</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>מכשיר</label>
+          <select id="fldInstrument"></select>
+        </div>
+        <div class="field">
+          <label>חוזים</label>
+          <input type="number" class="num" id="fldContracts" min="1" step="1" value="1">
+        </div>
+        <div class="field">
+          <label>מחיר כניסה</label>
+          <input type="number" class="num" id="fldEntry" step="0.25" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label>מחיר יציאה</label>
+          <input type="number" class="num" id="fldExit" step="0.25" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label>סטופ לוס (אופציונלי)</label>
+          <input type="number" class="num" id="fldStop" step="0.25" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label>יעד (אופציונלי)</label>
+          <input type="number" class="num" id="fldTarget" step="0.25" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label>עמלות ($)</label>
+          <input type="number" class="num" id="fldFees" step="0.01" value="0">
+        </div>
+        <div class="field">
+          <label>סשן</label>
+          <select id="fldSession">
+            <option>פתיחה (Open)</option>
+            <option>NY בוקר</option>
+            <option>NY אחה״צ</option>
+            <option>04:00–08:00 (ריוורסל)</option>
+            <option>לונדון</option>
+            <option>אסיה</option>
+            <option>אחר</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label>סטאפ / אסטרטגיה</label>
+          <input type="text" id="fldSetup" list="setupList" placeholder="ORB / BB+VWAP / ProfitBot / Reversal …" autocomplete="off">
+          <datalist id="setupList">
+            <option>ORB</option><option>BB+VWAP</option><option>ProfitBot</option>
+            <option>Reversal</option><option>Breakout</option><option>Pullback</option>
+            <option>Range</option><option>Trend</option>
+          </datalist>
+        </div>
+
+        <div class="live-calc">
+          <div class="lc"><div class="l">רווח / הפסד</div><div class="v" id="lcPnl">—</div></div>
+          <div class="lc"><div class="l">R מרובה</div><div class="v" id="lcR">—</div></div>
+          <div class="lc"><div class="l">סיכון</div><div class="v" id="lcRisk">—</div></div>
+        </div>
+
+        <div class="field">
+          <label>רגש בכניסה</label>
+          <select id="fldEmoBefore">
+            <option>רגוע</option><option>ביטחון</option><option>FOMO</option>
+            <option>נקמה</option><option>פחד</option><option>חוסר סבלנות</option><option>שעמום</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>פעלתי לפי התוכנית?</label>
+          <select id="fldPlan"><option value="yes">כן</option><option value="no">לא</option></select>
+        </div>
+
+        <div class="field full">
+          <label>טעויות (סמן את מה שקרה)</label>
+          <div class="chips" id="mistakeChips"></div>
+        </div>
+
+        <div class="field full">
+          <label>הערות ותובנות</label>
+          <textarea id="fldNotes" placeholder="מה ראיתי? מה הרגשתי? מה אעשה אחרת בפעם הבאה?"></textarea>
+        </div>
+
+        <div class="field full">
+          <label>איכות העסקה</label>
+          <div class="stars" id="starRating"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-ghost" id="modalCancel">ביטול</button>
+      <button class="btn btn-primary" id="modalSave">שמירת עסקה</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="importFile" accept="application/json" style="display:none">
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ---------- safe storage (works on GitHub Pages; falls back to memory in sandbox) ---------- */
+const Store = (() => {
+  let mem = {};
+  let ok = true;
+  try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); }
+  catch(e){ ok = false; }
+  return {
+    get(k){ try { return ok ? localStorage.getItem(k) : (mem[k] ?? null); } catch(e){ return mem[k] ?? null; } },
+    set(k,v){ try { ok ? localStorage.setItem(k,v) : (mem[k]=v); } catch(e){ mem[k]=v; } }
+  };
+})();
+const KEY = "nasdaq_journal_v1";
+
+/* ---------- instrument point values ($ per 1.00 point per contract) ---------- */
+const INSTRUMENTS = {
+  "NQ":  {pt:20,  label:"NQ · Nasdaq"},
+  "MNQ": {pt:2,   label:"MNQ · Micro Nasdaq"},
+  "ES":  {pt:50,  label:"ES · S&P 500"},
+  "MES": {pt:5,   label:"MES · Micro S&P"},
+  "YM":  {pt:5,   label:"YM · Dow"},
+  "RTY": {pt:50,  label:"RTY · Russell"},
+  "CL":  {pt:1000,label:"CL · Crude Oil"},
+  "GC":  {pt:100, label:"GC · Gold"}
+};
+const MISTAKES = ["כניסה מוקדמת","רדיפת מחיר","ללא סטופ","הזזת סטופ","יציאה מוקדמת","אוברטרייד","נגד המגמה","גודל פוזיציה","נקמה","התעלמות מהתוכנית"];
+
+/* ---------- state ---------- */
+let trades = [];
+let editingId = null;
+let draftDir = "long", draftMistakes = new Set(), draftRating = 0;
+let calDate = new Date();
+
+function load(){
+  try { trades = JSON.parse(Store.get(KEY) || "[]"); if(!Array.isArray(trades)) trades=[]; }
+  catch(e){ trades = []; }
+}
+function save(){ Store.set(KEY, JSON.stringify(trades)); }
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const fmtMoney = n => (n<0?"-":"") + "$" + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0});
+const fmtMoney2 = n => (n<0?"-":"") + "$" + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const sign = n => n>0?"+":"";
+const clsPN = n => n>0?"pos":(n<0?"neg":"dim");
+
+function pnlOf(t){
+  const pt = (INSTRUMENTS[t.instrument]?.pt) ?? 1;
+  const dirMul = t.direction==="long"?1:-1;
+  const gross = (t.exit - t.entry) * pt * t.contracts * dirMul;
+  return gross - (t.fees||0);
+}
+function riskOf(t){
+  if(t.stop==null || t.stop==="" || isNaN(t.stop)) return null;
+  const pt = (INSTRUMENTS[t.instrument]?.pt) ?? 1;
+  const r = Math.abs(t.entry - t.stop) * pt * t.contracts;
+  return r>0 ? r : null;
+}
+function rOf(t){
+  const risk = riskOf(t);
+  if(!risk) return null;
+  return pnlOf(t)/risk;
+}
+const dayKey = iso => { const d=new Date(iso); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+
+/* ---------- filters ---------- */
+function getFiltered(){
+  const fi=$("#fInstrument").value, fse=$("#fSession").value, fst=$("#fSetup").value, fr=$("#fRange").value;
+  let list = trades.slice();
+  if(fi) list=list.filter(t=>t.instrument===fi);
+  if(fse) list=list.filter(t=>t.session===fse);
+  if(fst) list=list.filter(t=>(t.setup||"")===fst);
+  if(fr!=="all"){
+    const now=new Date();
+    let from;
+    if(fr==="ytd") from=new Date(now.getFullYear(),0,1);
+    else { from=new Date(); from.setDate(from.getDate()-parseInt(fr)); }
+    list=list.filter(t=>new Date(t.date)>=from);
+  }
+  return list.sort((a,b)=>new Date(a.date)-new Date(b.date));
+}
+
+/* ---------- stats ---------- */
+function computeStats(list){
+  const n=list.length;
+  const pnls=list.map(pnlOf);
+  const net=pnls.reduce((a,b)=>a+b,0);
+  const wins=pnls.filter(p=>p>0), losses=pnls.filter(p=>p<0);
+  const grossW=wins.reduce((a,b)=>a+b,0), grossL=Math.abs(losses.reduce((a,b)=>a+b,0));
+  const winRate=n? (wins.length/n*100):0;
+  const avgWin=wins.length? grossW/wins.length:0;
+  const avgLoss=losses.length? grossL/losses.length:0;
+  const pf= grossL>0 ? grossW/grossL : (grossW>0?Infinity:0);
+  const expectancy= n? net/n : 0;
+  const rs=list.map(rOf).filter(r=>r!==null);
+  const avgR= rs.length? rs.reduce((a,b)=>a+b,0)/rs.length : null;
+  // equity + drawdown
+  let eq=0, peak=0, maxDD=0;
+  const curve=[];
+  list.forEach(t=>{ eq+=pnlOf(t); peak=Math.max(peak,eq); maxDD=Math.max(maxDD,peak-eq); curve.push(eq); });
+  // streaks
+  let curStreak=0, maxWinStreak=0, maxLossStreak=0, ws=0, ls=0;
+  pnls.forEach(p=>{
+    if(p>0){ ws++; ls=0; maxWinStreak=Math.max(maxWinStreak,ws); }
+    else if(p<0){ ls++; ws=0; maxLossStreak=Math.max(maxLossStreak,ls); }
+  });
+  for(let i=pnls.length-1;i>=0;i--){ if(pnls[i]===0) continue; const s=pnls[i]>0?1:-1; if(curStreak===0||Math.sign(curStreak)===s) curStreak+=s; else break; }
+  const best=n?Math.max(...pnls):0, worst=n?Math.min(...pnls):0;
+  const planFollowed=list.filter(t=>t.plan==="yes").length;
+  const discipline= n? planFollowed/n*100:0;
+  return {n,net,winRate,avgWin,avgLoss,pf,expectancy,avgR,maxDD,curve,maxWinStreak,maxLossStreak,curStreak,best,worst,discipline,grossW,grossL,wins:wins.length,losses:losses.length};
+}
+
+/* ---------- KPIs ---------- */
+function renderKPIs(s){
+  const pfTxt = s.pf===Infinity?"∞":s.pf.toFixed(2);
+  const k=[
+    {label:"רווח/הפסד נטו", val:(sign(s.net)+fmtMoney(s.net)), cls:clsPN(s.net), meta:s.n+" עסקאות", hero:true},
+    {label:"אחוז הצלחה", val:s.winRate.toFixed(0)+"%", cls:s.winRate>=50?"pos":"", meta:s.wins+"W / "+s.losses+"L"},
+    {label:"Profit Factor", val:pfTxt, cls:s.pf>=1.5?"pos":(s.pf<1&&s.n?"neg":""), meta:"רווח/הפסד גולמי"},
+    {label:"תוחלת לעסקה", val:(sign(s.expectancy)+fmtMoney(s.expectancy)), cls:clsPN(s.expectancy), meta:s.avgR!=null?("ממוצע "+sign(s.avgR)+s.avgR.toFixed(2)+"R"):"—"},
+    {label:"רווח ממוצע", val:fmtMoney(s.avgWin), cls:"pos", meta:"לעסקה מנצחת"},
+    {label:"הפסד ממוצע", val:fmtMoney(s.avgLoss), cls:"neg", meta:"לעסקה מפסידה"},
+    {label:"דרודאון מקס׳", val:fmtMoney(s.maxDD), cls:"neg", meta:"מהשיא"},
+    {label:"רצף נוכחי", val:(s.curStreak>0?"+"+s.curStreak:s.curStreak), cls:clsPN(s.curStreak), meta:"מקס׳ "+s.maxWinStreak+"W · "+s.maxLossStreak+"L"}
+  ];
+  $("#kpis").innerHTML = k.map(x=>`
+    <div class="kpi${x.hero?' hero':''}">
+      <div class="label">${x.label}</div>
+      <div class="val ${x.cls}">${x.val}</div>
+      <div class="meta">${x.meta}</div>
+    </div>`).join("");
+}
+
+/* ---------- equity chart (hand-drawn SVG) ---------- */
+function renderEquity(s){
+  const svg=$("#equityChart");
+  const W=800,H=260,padL=8,padR=8,padT=18,padB=18;
+  const c=s.curve;
+  if(!c.length){ svg.innerHTML=`<text x="400" y="130" fill="#5A647C" text-anchor="middle" font-size="14">אין נתונים עדיין</text>`; $("#eqHint").textContent=""; return; }
+  const data=[0,...c];
+  const min=Math.min(0,...data), max=Math.max(0,...data);
+  const range=(max-min)||1;
+  const x=i=> padL + i*(W-padL-padR)/(data.length-1 || 1);
+  const y=v=> padT + (max-v)/range*(H-padT-padB);
+  // running peak at each point -> used to shade drawdown ("underwater") regions
+  const peaks=[]; let pk=-Infinity;
+  data.forEach(v=>{ pk=Math.max(pk,v); peaks.push(pk); });
+  const line=data.map((v,i)=>`${i===0?"M":"L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area=`${line} L${x(data.length-1).toFixed(1)},${y(min).toFixed(1)} L${x(0).toFixed(1)},${y(min).toFixed(1)} Z`;
+  // band between running peak (top) and equity (bottom): zero width when at a new high, widens during drawdown
+  const peakLine=data.map((v,i)=>`${i===0?"M":"L"}${x(i).toFixed(1)},${y(peaks[i]).toFixed(1)}`).join(" ");
+  const backLine=data.map((v,i)=>{ const j=data.length-1-i; return `L${x(j).toFixed(1)},${y(data[j]).toFixed(1)}`; }).join(" ");
+  const ddArea=`${peakLine} ${backLine} Z`;
+  const zeroY=y(0).toFixed(1);
+  const lastV=c[c.length-1];
+  svg.innerHTML=`
+    <defs>
+      <linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${lastV>=0?'#5B8DEF':'#FB6E72'}" stop-opacity="0.30"/>
+        <stop offset="100%" stop-color="${lastV>=0?'#5B8DEF':'#FB6E72'}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <line x1="${padL}" y1="${zeroY}" x2="${W-padR}" y2="${zeroY}" stroke="#2C374F" stroke-width="1" stroke-dasharray="4 4"/>
+    <path d="${area}" fill="url(#eqGrad)"/>
+    <path d="${ddArea}" fill="rgba(251,110,114,0.15)"/>
+    <path d="${line}" fill="none" stroke="${lastV>=0?'#5B8DEF':'#FB6E72'}" stroke-width="2.2" stroke-linejoin="round"/>
+    <circle cx="${x(data.length-1).toFixed(1)}" cy="${y(lastV).toFixed(1)}" r="4" fill="${lastV>=0?'#5B8DEF':'#FB6E72'}"/>
+  `;
+  $("#eqHint").innerHTML = `הון: <span class="num ${clsPN(lastV)}">${sign(lastV)+fmtMoney(lastV)}</span>`;
+}
+
+/* ---------- calendar ---------- */
+function renderCalendar(){
+  const y=calDate.getFullYear(), m=calDate.getMonth();
+  const monthNames=["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
+  $("#calMonth").textContent=monthNames[m]+" "+y;
+  // aggregate by day (use filtered set so it respects filters)
+  const list=getFiltered();
+  const byDay={};
+  list.forEach(t=>{ const d=new Date(t.date); if(d.getFullYear()===y&&d.getMonth()===m){ const k=d.getDate(); if(!byDay[k])byDay[k]={pnl:0,n:0}; byDay[k].pnl+=pnlOf(t); byDay[k].n++; } });
+  const maxAbs=Math.max(1,...Object.values(byDay).map(v=>Math.abs(v.pnl)));
+  const firstDow=new Date(y,m,1).getDay();
+  const days=new Date(y,m+1,0).getDate();
+  const dow=["א","ב","ג","ד","ה","ו","ש"];
+  let html=dow.map(d=>`<div class="cal-dow">${d}</div>`).join("");
+  for(let i=0;i<firstDow;i++) html+=`<div class="cal-cell empty"></div>`;
+  let mTotal=0, mTrades=0, green=0, redd=0;
+  for(let d=1;d<=days;d++){
+    const v=byDay[d];
+    if(v){
+      mTotal+=v.pnl; mTrades+=v.n; if(v.pnl>0)green++; else if(v.pnl<0)redd++;
+      const intensity=Math.min(1,Math.abs(v.pnl)/maxAbs);
+      const op=(0.12+intensity*0.55).toFixed(2);
+      const col=v.pnl>=0?`52,211,153`:`251,110,114`;
+      html+=`<div class="cal-cell has" style="background:rgba(${col},${op});border-color:rgba(${col},.4)">
+        <div class="d">${d}</div>
+        <div class="p ${clsPN(v.pnl)}" style="color:#fff">${sign(v.pnl)+fmtMoney(v.pnl)}</div>
+        <div class="c" style="color:rgba(255,255,255,.65)">${v.n} עסק׳</div>
+      </div>`;
+    } else {
+      html+=`<div class="cal-cell"><div class="d">${d}</div></div>`;
+    }
+  }
+  $("#calGrid").innerHTML=html;
+  $("#calSummary").innerHTML=`
+    <span>סה״כ חודשי: <b class="${clsPN(mTotal)}">${sign(mTotal)+fmtMoney(mTotal)}</b></span>
+    <span class="dim">${mTrades} עסקאות</span>
+    <span class="pos">${green} ימים ירוקים</span>
+    <span class="neg">${redd} ימים אדומים</span>`;
+}
+
+/* ---------- bar breakdown ---------- */
+function barBreakdown(list, keyFn){
+  const g={};
+  list.forEach(t=>{ const k=keyFn(t)||"—"; if(!g[k])g[k]={pnl:0,n:0,w:0}; const p=pnlOf(t); g[k].pnl+=p; g[k].n++; if(p>0)g[k].w++; });
+  return Object.entries(g).map(([k,v])=>({name:k,...v,wr:v.n?v.w/v.n*100:0})).sort((a,b)=>b.pnl-a.pnl);
+}
+function renderBars(el, rows){
+  if(!rows.length){ el.innerHTML=`<div class="dim" style="font-size:13px;padding:8px 0">אין נתונים</div>`; return; }
+  const maxAbs=Math.max(1,...rows.map(r=>Math.abs(r.pnl)));
+  el.innerHTML=rows.map(r=>{
+    const w=(Math.abs(r.pnl)/maxAbs*100).toFixed(1);
+    const col=r.pnl>=0?"var(--green)":"var(--red)";
+    return `<div class="bar-row">
+      <div class="name" title="${r.name}">${r.name}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${w}%;background:${col};opacity:.85;right:0"></div></div>
+      <div class="v ${clsPN(r.pnl)}">${sign(r.pnl)+fmtMoney(r.pnl)}<span class="dim" style="font-size:10px;margin-inline-start:5px">${r.wr.toFixed(0)}%</span></div>
+    </div>`;
+  }).join("");
+}
+
+/* ---------- R histogram ---------- */
+function renderRHist(list){
+  const el=$("#rHist");
+  const buckets=[
+    {lbl:"<-2R",test:r=>r<-2,col:"#8A3338"},
+    {lbl:"-2..-1",test:r=>r>=-2&&r<-1,col:"#B14A4F"},
+    {lbl:"-1..0",test:r=>r>=-1&&r<0,col:"#FB6E72"},
+    {lbl:"0..1",test:r=>r>=0&&r<1,col:"#2E8B6B"},
+    {lbl:"1..2",test:r=>r>=1&&r<2,col:"#34D399"},
+    {lbl:"2..3",test:r=>r>=2&&r<3,col:"#4FE0AC"},
+    {lbl:">3R",test:r=>r>=3,col:"#7CF0C8"}
+  ];
+  const rs=list.map(rOf).filter(r=>r!==null);
+  if(!rs.length){ el.innerHTML=`<div class="dim" style="font-size:13px">הוסף סטופ-לוס לעסקאות כדי לראות פיזור R</div>`; return; }
+  const counts=buckets.map(b=>rs.filter(b.test).length);
+  const max=Math.max(1,...counts);
+  el.innerHTML=buckets.map((b,i)=>`
+    <div class="hist-col">
+      <div class="hist-cnt" style="color:${b.col}">${counts[i]||""}</div>
+      <div class="hist-bar" style="height:${(counts[i]/max*100).toFixed(0)}%;background:${b.col}"></div>
+      <div class="hist-lbl">${b.lbl}</div>
+    </div>`).join("");
+}
+
+/* ---------- trades table ---------- */
+function renderTrades(){
+  const list=getFiltered().slice().reverse();
+  const el=$("#tradesContent");
+  if(!list.length){
+    el.innerHTML=`<div class="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+      <h3>אין עדיין עסקאות</h3>
+      <p>תתחיל לתעד — כל עסקה היא דאטה. אחרי כמה ימים תתחיל לראות את התבניות שלך.</p>
+      <button class="btn btn-primary" onclick="openModal()">+ הוסף עסקה ראשונה</button>
+    </div>`;
+    return;
+  }
+  const rows=list.map(t=>{
+    const p=pnlOf(t), r=rOf(t);
+    const d=new Date(t.date);
+    const dd=String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+    const tm=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    const stars="★".repeat(t.rating||0);
+    return `<tr>
+      <td><span class="num">${dd}</span> <span class="dim num" style="font-size:11px">${tm}</span></td>
+      <td><span class="num" style="font-weight:600">${t.instrument}</span></td>
+      <td><span class="dir-${t.direction}">${t.direction==="long"?"לונג":"שורט"}</span></td>
+      <td><span class="num">${t.contracts}</span></td>
+      <td><span class="num dim">${t.entry}</span> → <span class="num dim">${t.exit}</span></td>
+      <td><span class="num ${clsPN(p)}" style="font-weight:700">${sign(p)+fmtMoney2(p)}</span></td>
+      <td><span class="num ${r!=null?clsPN(r):'dim'}">${r!=null?(sign(r)+r.toFixed(2)+"R"):"—"}</span></td>
+      <td>${t.setup?`<span class="tag">${t.setup}</span>`:'<span class="dim">—</span>'}</td>
+      <td><span class="dim" style="font-size:12px">${t.session||"—"}</span></td>
+      <td><span style="color:var(--amber);font-size:12px">${stars||""}</span></td>
+      <td><div class="row-act">
+        <button onclick="openModal('${t.id}')" title="עריכה"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+        <button class="del" onclick="delTrade('${t.id}')" title="מחיקה"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+      </div></td>
+    </tr>`;
+  }).join("");
+  el.innerHTML=`<div class="table-scroll"><table>
+    <thead><tr>
+      <th>תאריך</th><th>מכשיר</th><th>כיוון</th><th>חוזים</th><th>כניסה→יציאה</th>
+      <th>P&L</th><th>R</th><th>סטאפ</th><th>סשן</th><th>איכות</th><th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+/* ---------- analytics ---------- */
+function renderAnalytics(){
+  const list=getFiltered();
+  const s=computeStats(list);
+  const pfTxt=s.pf===Infinity?"∞":s.pf.toFixed(2);
+  const payoff= s.avgLoss>0 ? (s.avgWin/s.avgLoss).toFixed(2) : "—";
+  $("#anStats").innerHTML=`
+    <div class="mini"><div class="l">יחס רווח/הפסד (Payoff)</div><div class="v">${payoff}</div></div>
+    <div class="mini"><div class="l">העסקה הטובה ביותר</div><div class="v pos">${sign(s.best)+fmtMoney(s.best)}</div></div>
+    <div class="mini"><div class="l">העסקה הגרועה ביותר</div><div class="v neg">${fmtMoney(s.worst)}</div></div>`;
+  renderBars($("#bySession"), barBreakdown(list,t=>t.session));
+  renderBars($("#bySetup"), barBreakdown(list,t=>t.setup));
+  const dowNames=["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"];
+  renderBars($("#byDow"), barBreakdown(list,t=>dowNames[new Date(t.date).getDay()]));
+  renderRHist(list);
+}
+
+/* ---------- psychology ---------- */
+function renderPsych(){
+  const list=getFiltered();
+  const s=computeStats(list);
+  const planTrades=list.filter(t=>t.plan==="yes");
+  const offPlan=list.filter(t=>t.plan==="no");
+  const planNet=planTrades.reduce((a,t)=>a+pnlOf(t),0);
+  const offNet=offPlan.reduce((a,t)=>a+pnlOf(t),0);
+  $("#psStats").innerHTML=`
+    <div class="mini"><div class="l">ציון משמעת</div><div class="v ${s.discipline>=70?'pos':(s.discipline<50&&s.n?'neg':'')}">${s.discipline.toFixed(0)}%</div></div>
+    <div class="mini"><div class="l">P&L כשפעלתי לפי התוכנית</div><div class="v ${clsPN(planNet)}">${sign(planNet)+fmtMoney(planNet)}</div></div>
+    <div class="mini"><div class="l">P&L כשסטיתי מהתוכנית</div><div class="v ${clsPN(offNet)}">${sign(offNet)+fmtMoney(offNet)}</div></div>`;
+  renderBars($("#byEmotion"), barBreakdown(list,t=>t.emoBefore));
+  // mistakes
+  const mg={};
+  list.forEach(t=>(t.mistakes||[]).forEach(m=>{ if(!mg[m])mg[m]={pnl:0,n:0,w:0}; mg[m].pnl+=pnlOf(t); mg[m].n++; }));
+  const mrows=Object.entries(mg).map(([k,v])=>({name:k,...v,wr:0})).sort((a,b)=>a.pnl-b.pnl);
+  if(!mrows.length){ $("#byMistake").innerHTML=`<div class="dim" style="font-size:13px;padding:8px 0">לא תויגו טעויות — כל הכבוד 💪</div>`; }
+  else {
+    const maxAbs=Math.max(1,...mrows.map(r=>Math.abs(r.pnl)));
+    $("#byMistake").innerHTML=mrows.map(r=>{
+      const w=(Math.abs(r.pnl)/maxAbs*100).toFixed(1);
+      return `<div class="bar-row">
+        <div class="name" title="${r.name}">${r.name}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${w}%;background:var(--red);opacity:.8;right:0"></div></div>
+        <div class="v ${clsPN(r.pnl)}">${sign(r.pnl)+fmtMoney(r.pnl)} <span class="dim" style="font-size:10px">×${r.n}</span></div>
+      </div>`;
+    }).join("");
+  }
+  // recent notes
+  const notes=list.filter(t=>t.notes&&t.notes.trim()).slice().reverse().slice(0,6);
+  if(!notes.length){ $("#recentNotes").innerHTML=`<div class="dim" style="font-size:13px">עדיין אין הערות. כתוב תובנה בכל עסקה — שם נמצא הזהב.</div>`; }
+  else $("#recentNotes").innerHTML=notes.map(t=>{
+    const p=pnlOf(t); const d=new Date(t.date);
+    return `<div style="padding:12px 0;border-bottom:1px solid var(--line)">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:5px">
+        <span class="num dim" style="font-size:12px">${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</span>
+        <span class="tag">${t.instrument} · ${t.session||"—"}</span>
+        <span class="num ${clsPN(p)}" style="font-weight:700;font-size:13px">${sign(p)+fmtMoney(p)}</span>
+      </div>
+      <div style="font-size:13.5px;color:var(--txt);line-height:1.55">${escapeHtml(t.notes)}</div>
+    </div>`;
+  }).join("");
+}
+function escapeHtml(s){ return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+/* ---------- master render ---------- */
+function renderAll(){
+  const list=getFiltered();
+  const s=computeStats(list);
+  renderKPIs(s);
+  renderEquity(s);
+  renderCalendar();
+  renderTrades();
+  renderAnalytics();
+  renderPsych();
+  populateFilterOptions();
+}
+
+/* ---------- filter option population ---------- */
+function populateFilterOptions(){
+  const setups=[...new Set(trades.map(t=>t.setup).filter(Boolean))];
+  const sel=$("#fSetup"), cur=sel.value;
+  sel.innerHTML=`<option value="">הכל</option>`+setups.map(x=>`<option>${x}</option>`).join("");
+  sel.value=cur;
+}
+
+/* ---------- modal ---------- */
+function buildInstrumentOptions(){
+  $("#fldInstrument").innerHTML=Object.entries(INSTRUMENTS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("");
+  $("#fInstrument").innerHTML=`<option value="">הכל</option>`+Object.keys(INSTRUMENTS).map(k=>`<option>${k}</option>`).join("");
+  const fs=$("#fSession");
+  ["פתיחה (Open)","NY בוקר","NY אחה״צ","04:00–08:00 (ריוורסל)","לונדון","אסיה","אחר"].forEach(x=>{const o=document.createElement("option");o.textContent=x;fs.appendChild(o);});
+}
+function buildMistakeChips(){
+  $("#mistakeChips").innerHTML=MISTAKES.map(m=>`<button type="button" class="chip" data-m="${m}">${m}</button>`).join("");
+  $$("#mistakeChips .chip").forEach(c=>c.onclick=()=>{ const m=c.dataset.m; if(draftMistakes.has(m)){draftMistakes.delete(m);c.classList.remove("on");}else{draftMistakes.add(m);c.classList.add("on");} });
+}
+function buildStars(){
+  $("#starRating").innerHTML=[1,2,3,4,5].map(i=>`<button type="button" data-s="${i}">★</button>`).join("");
+  $$("#starRating button").forEach(b=>b.onclick=()=>{ draftRating=parseInt(b.dataset.s); paintStars(); });
+}
+function paintStars(){ $$("#starRating button").forEach(b=>b.classList.toggle("on", parseInt(b.dataset.s)<=draftRating)); }
+function setDir(d){ draftDir=d; $("#dirLong").classList.toggle("on-long",d==="long"); $("#dirShort").classList.toggle("on-short",d==="short"); liveCalc(); }
+
+function liveCalc(){
+  const entry=parseFloat($("#fldEntry").value), exit=parseFloat($("#fldExit").value);
+  const contracts=parseInt($("#fldContracts").value)||1;
+  const stop=parseFloat($("#fldStop").value);
+  const fees=parseFloat($("#fldFees").value)||0;
+  const inst=$("#fldInstrument").value;
+  if(isNaN(entry)||isNaN(exit)){ $("#lcPnl").textContent="—";$("#lcPnl").className="v"; $("#lcR").textContent="—";$("#lcR").className="v"; }
+  else {
+    const t={instrument:inst,entry,exit,contracts,stop:isNaN(stop)?null:stop,fees,direction:draftDir};
+    const p=pnlOf(t), r=rOf(t);
+    $("#lcPnl").textContent=sign(p)+fmtMoney2(p); $("#lcPnl").className="v "+clsPN(p);
+    $("#lcR").textContent= r!=null?(sign(r)+r.toFixed(2)+"R"):"—"; $("#lcR").className="v "+(r!=null?clsPN(r):"");
+  }
+  if(isNaN(entry)||isNaN(stop)){ $("#lcRisk").textContent="—";$("#lcRisk").className="v"; }
+  else { const risk=riskOf({instrument:inst,entry,stop,contracts}); $("#lcRisk").textContent= risk?("-"+fmtMoney2(risk)):"—"; $("#lcRisk").className="v neg"; }
+}
+
+function openModal(id){
+  editingId=id||null;
+  draftMistakes=new Set(); draftRating=0;
+  $("#modalTitle").textContent= id?"עריכת עסקה":"עסקה חדשה";
+  $$("#mistakeChips .chip").forEach(c=>c.classList.remove("on"));
+  if(id){
+    const t=trades.find(x=>x.id===id); if(!t)return;
+    $("#fldDate").value=toLocalInput(t.date);
+    $("#fldInstrument").value=t.instrument;
+    $("#fldContracts").value=t.contracts;
+    $("#fldEntry").value=t.entry; $("#fldExit").value=t.exit;
+    $("#fldStop").value=t.stop??""; $("#fldTarget").value=t.target??"";
+    $("#fldFees").value=t.fees||0;
+    $("#fldSession").value=t.session||"פתיחה (Open)";
+    $("#fldSetup").value=t.setup||"";
+    $("#fldEmoBefore").value=t.emoBefore||"רגוע";
+    $("#fldPlan").value=t.plan||"yes";
+    $("#fldNotes").value=t.notes||"";
+    setDir(t.direction);
+    (t.mistakes||[]).forEach(m=>{ draftMistakes.add(m); const c=document.querySelector(`#mistakeChips .chip[data-m="${m}"]`); if(c)c.classList.add("on"); });
+    draftRating=t.rating||0;
+  } else {
+    $("#fldDate").value=toLocalInput(new Date().toISOString());
+    $("#fldInstrument").value="NQ"; $("#fldContracts").value=1;
+    $("#fldEntry").value=""; $("#fldExit").value=""; $("#fldStop").value=""; $("#fldTarget").value="";
+    $("#fldFees").value=0; $("#fldSession").value="פתיחה (Open)"; $("#fldSetup").value="";
+    $("#fldEmoBefore").value="רגוע"; $("#fldPlan").value="yes"; $("#fldNotes").value="";
+    setDir("long");
+  }
+  paintStars(); liveCalc();
+  $("#overlay").classList.add("open");
+  document.body.style.overflow="hidden";
+}
+function closeModal(){ $("#overlay").classList.remove("open"); document.body.style.overflow=""; }
+function toLocalInput(iso){ const d=new Date(iso); const off=d.getTimezoneOffset(); const local=new Date(d.getTime()-off*60000); return local.toISOString().slice(0,16); }
+
+function saveTrade(){
+  const entry=parseFloat($("#fldEntry").value), exit=parseFloat($("#fldExit").value);
+  if(isNaN(entry)||isNaN(exit)){ toast("צריך מחיר כניסה ויציאה"); return; }
+  const stop=parseFloat($("#fldStop").value), target=parseFloat($("#fldTarget").value);
+  const t={
+    id: editingId||uid(),
+    date: new Date($("#fldDate").value||Date.now()).toISOString(),
+    instrument: $("#fldInstrument").value,
+    direction: draftDir,
+    contracts: parseInt($("#fldContracts").value)||1,
+    entry, exit,
+    stop: isNaN(stop)?null:stop,
+    target: isNaN(target)?null:target,
+    fees: parseFloat($("#fldFees").value)||0,
+    session: $("#fldSession").value,
+    setup: $("#fldSetup").value.trim(),
+    emoBefore: $("#fldEmoBefore").value,
+    plan: $("#fldPlan").value,
+    mistakes: [...draftMistakes],
+    notes: $("#fldNotes").value.trim(),
+    rating: draftRating
+  };
+  if(editingId){ const i=trades.findIndex(x=>x.id===editingId); trades[i]=t; }
+  else trades.push(t);
+  save(); closeModal(); renderAll();
+  toast(editingId?"העסקה עודכנה":"העסקה נשמרה ✓");
+}
+function delTrade(id){
+  if(!confirm("למחוק את העסקה? אי אפשר לשחזר.")) return;
+  trades=trades.filter(t=>t.id!==id); save(); renderAll(); toast("נמחק");
+}
+
+/* ---------- export / import ---------- */
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(trades,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="nasdaq-journal-"+new Date().toISOString().slice(0,10)+".json";
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("גיבוי הורד ✓");
+}
+function importJSON(file){
+  const r=new FileReader();
+  r.onload=()=>{ try{ const data=JSON.parse(r.result); if(!Array.isArray(data)) throw 0;
+    if(confirm("לשחזר "+data.length+" עסקאות? זה יחליף את הקיים.")){ trades=data; save(); renderAll(); toast("שוחזר ✓"); }
+  }catch(e){ toast("קובץ לא תקין"); } };
+  r.readAsText(file);
+}
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg){ const el=$("#toast"); el.textContent=msg; el.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove("show"),2200); }
+
+/* ---------- tabs ---------- */
+$$(".tab").forEach(t=>t.onclick=()=>{
+  $$(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active");
+  $$(".view").forEach(v=>v.classList.remove("active"));
+  $("#view-"+t.dataset.view).classList.add("active");
+});
+
+/* ---------- wire up ---------- */
+$("#btnAdd").onclick=()=>openModal();
+$("#modalClose").onclick=closeModal;
+$("#modalCancel").onclick=closeModal;
+$("#modalSave").onclick=saveTrade;
+$("#overlay").onclick=e=>{ if(e.target.id==="overlay") closeModal(); };
+$("#dirLong").onclick=()=>setDir("long");
+$("#dirShort").onclick=()=>setDir("short");
+["fldEntry","fldExit","fldStop","fldContracts","fldFees","fldInstrument"].forEach(id=>{ $("#"+id).addEventListener("input",liveCalc); $("#"+id).addEventListener("change",liveCalc); });
+$("#btnExport").onclick=exportJSON;
+$("#btnImport").onclick=()=>$("#importFile").click();
+$("#importFile").onchange=e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=""; };
+$("#calPrev").onclick=()=>{ calDate.setMonth(calDate.getMonth()-1); renderCalendar(); };
+$("#calNext").onclick=()=>{ calDate.setMonth(calDate.getMonth()+1); renderCalendar(); };
+["fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
+$("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape") closeModal();
+  if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA") openModal();
+});
+
+/* ---------- init ---------- */
+buildInstrumentOptions();
+buildMistakeChips();
+buildStars();
+load();
+renderAll();
+</script>
+</body>
+</html>
