@@ -504,6 +504,7 @@ tbody tr:last-child td{border-bottom:none}
   <button class="tab" data-view="psych">פסיכולוגיה</button>
   <button class="tab" data-view="rules">כללי ברזל</button>
   <button class="tab" data-view="coach">המאמן</button>
+  <button class="tab" data-view="forecast">🔮 העתיד</button>
 </div>
 
 <div class="wrap">
@@ -662,6 +663,38 @@ tbody tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="insights" id="insights"></div>
+  </div>
+
+  <!-- ============ FORECAST ============ -->
+  <div class="view" id="view-forecast">
+    <div class="coach-hd">
+      <div class="ava"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z"/><path d="M12 8v4l3 2"/></svg></div>
+      <div>
+        <h3>מראת העתיד</h3>
+        <p id="fcIntro"></p>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-h">
+        <h3>תחזית הון — 500 תרחישים</h3>
+        <select id="fcHorizon" style="background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:7px 10px;border-radius:9px">
+          <option value="50">50 עסקאות קדימה</option>
+          <option value="100" selected>100 עסקאות קדימה</option>
+          <option value="200">200 עסקאות קדימה</option>
+        </select>
+      </div>
+      <div class="chart-wrap"><svg class="chart" id="forecastChart" viewBox="0 0 800 300" preserveAspectRatio="none"></svg></div>
+      <div class="legend">
+        <span><i style="background:var(--blue)"></i>מסלול חציוני (אתה כפי שאתה)</span>
+        <span><i style="background:var(--blue);opacity:.25"></i>טווח 5%–95%</span>
+        <span><i style="background:var(--amber)"></i>אתה הממושמע</span>
+      </div>
+    </div>
+    <div class="sub-stats" id="fcStats"></div>
+    <div class="panel" id="fcGapPanel" style="display:none">
+      <div class="panel-h"><h3>💰 הפער של המשמעת</h3></div>
+      <div id="fcGap" style="font-size:14px;line-height:1.6;color:var(--muted)"></div>
+    </div>
   </div>
 
 </div>
@@ -1663,6 +1696,86 @@ function renderCoach(){
     : `<div class="day-empty" style="grid-column:1/-1">המשך לתעד — דפוסים ברורים יותר יופיעו כאן בקרוב.</div>`;
 }
 
+/* ---------- forecast: Monte Carlo projection ---------- */
+function tradeClean(t){
+  const planOk=t.plan!=="no";
+  const rulesOk=!(t.rulesTotal>0)||(t.rulesOK||[]).length>=t.rulesTotal;
+  const noMist=!(t.mistakes&&t.mistakes.length);
+  const calm=!t.emoBefore||t.emoBefore==="רגוע";
+  return planOk&&rulesOk&&noMist&&calm;
+}
+function pctl(sorted,p){ const i=Math.min(sorted.length-1,Math.max(0,Math.round((p/100)*(sorted.length-1)))); return sorted[i]; }
+function simulate(pnls, start, horizon, sims){
+  if(!pnls.length) return null;
+  const finals=[]; const cols=Array.from({length:horizon+1},()=>[]);
+  for(let s=0;s<sims;s++){
+    let eq=start; cols[0].push(eq);
+    for(let i=1;i<=horizon;i++){ eq+=pnls[(Math.random()*pnls.length)|0]; cols[i].push(eq); }
+    finals.push(eq);
+  }
+  const bands=cols.map(c=>{ c.sort((a,b)=>a-b); return {p5:pctl(c,5),p25:pctl(c,25),p50:pctl(c,50),p75:pctl(c,75),p95:pctl(c,95)}; });
+  return {bands, finals};
+}
+function renderForecast(){
+  const svg=$("#forecastChart"); if(!svg) return;
+  if(!$("#view-forecast").classList.contains("active")) return;
+  const closed=getClosed();
+  const pnls=closed.map(pnlOf);
+  const start=pnls.reduce((a,b)=>a+b,0);
+  const intro=$("#fcIntro");
+  if(closed.length<8){
+    intro.textContent="צריך לפחות ~8 עסקאות סגורות כדי לבנות תחזית אמינה. תמשיך לתעד — וכאן תראה לאן זה הולך.";
+    svg.innerHTML=`<text x="400" y="150" fill="#5A647C" text-anchor="middle" font-size="14">אין מספיק נתונים לתחזית</text>`;
+    $("#fcStats").innerHTML=""; $("#fcGapPanel").style.display="none";
+    return;
+  }
+  const horizon=parseInt($("#fcHorizon").value)||100;
+  const SIMS=500;
+  const cleanPnls=closed.filter(tradeClean).map(pnlOf);
+  const act=simulate(pnls,start,horizon,SIMS);
+  const cln=cleanPnls.length>=4 ? simulate(cleanPnls,start,horizon,SIMS) : null;
+
+  // scales
+  const allLo=[start,...act.bands.map(b=>b.p5),...(cln?cln.bands.map(b=>b.p50):[])];
+  const allHi=[start,...act.bands.map(b=>b.p95),...(cln?cln.bands.map(b=>b.p50):[])];
+  const min=Math.min(...allLo), max=Math.max(...allHi), range=(max-min)||1;
+  const W=800,H=300,padL=8,padR=8,padT=16,padB=16;
+  const x=i=>padL+i*(W-padL-padR)/horizon;
+  const y=v=>padT+(max-v)/range*(H-padT-padB);
+  const bandArea=(arr,lo,hi)=>{
+    const top=arr.map((b,i)=>`${i===0?"M":"L"}${x(i).toFixed(1)},${y(b[hi]).toFixed(1)}`).join(" ");
+    const bot=arr.map((b,i)=>{const j=arr.length-1-i;return `L${x(j).toFixed(1)},${y(arr[j][lo]).toFixed(1)}`;}).join(" ");
+    return top+" "+bot+" Z";
+  };
+  const line=(arr,key)=>arr.map((b,i)=>`${i===0?"M":"L"}${x(i).toFixed(1)},${y(b[key]).toFixed(1)}`).join(" ");
+  const zeroY=y(0).toFixed(1);
+  svg.innerHTML=`
+    <line x1="${padL}" y1="${zeroY}" x2="${W-padR}" y2="${zeroY}" stroke="#2C374F" stroke-width="1" stroke-dasharray="4 4"/>
+    <path d="${bandArea(act.bands,'p5','p95')}" fill="rgba(91,141,239,0.12)"/>
+    <path d="${bandArea(act.bands,'p25','p75')}" fill="rgba(91,141,239,0.22)"/>
+    <path d="${line(act.bands,'p50')}" fill="none" stroke="#5B8DEF" stroke-width="2.4" stroke-linejoin="round"/>
+    ${cln?`<path d="${line(cln.bands,'p50')}" fill="none" stroke="#E8B84B" stroke-width="2.2" stroke-dasharray="6 4" stroke-linejoin="round"/>`:""}
+  `;
+  // stats
+  const medEnd=act.bands[horizon].p50, lo=act.bands[horizon].p5, hi=act.bands[horizon].p95;
+  const probProfit=act.finals.filter(f=>f>start).length/SIMS*100;
+  intro.textContent=`לפי ${closed.length} העסקאות שלך, אלה 500 העתידים האפשריים שלך על פני ${horizon} העסקאות הבאות. החרוט הוא חוסר הוודאות — הקו הזהב הוא אתה במיטבך.`;
+  $("#fcStats").innerHTML=`
+    <div class="mini"><div class="l">תרחיש חציוני (${horizon})</div><div class="v ${clsPN(medEnd-start)}">${sign(medEnd)+fmtMoney(medEnd)}</div></div>
+    <div class="mini"><div class="l">טווח סביר (5%–95%)</div><div class="v" style="font-size:15px">${sign(lo)+fmtMoney(lo)} … ${sign(hi)+fmtMoney(hi)}</div></div>
+    <div class="mini"><div class="l">סיכוי להיות ברווח</div><div class="v ${probProfit>=50?'pos':'neg'}">${probProfit.toFixed(0)}%</div></div>`;
+  // discipline gap
+  const gp=$("#fcGapPanel");
+  if(cln){
+    const cleanMed=cln.bands[horizon].p50;
+    const gap=cleanMed-medEnd;
+    gp.style.display="";
+    $("#fcGap").innerHTML = gap>0
+      ? `אם תיכנס <b style="color:var(--amber)">רק כשאתה רגוע ולפי הכללים</b>, התרחיש החציוני שלך הוא <b class="pos">${sign(cleanMed)+fmtMoney(cleanMed)}</b> — לעומת <b class="${clsPN(medEnd-start)}">${sign(medEnd)+fmtMoney(medEnd)}</b> כפי שאתה סוחר היום.<br><br>הדחפים עולים לך בערך <b class="neg">${fmtMoney(Math.abs(gap))}</b> על פני ${horizon} העסקאות הבאות. <b>זה המחיר של חוסר משמעת — בדולרים, בעתיד.</b>`
+      : `המשמעת שלך כבר חזקה — העסקאות ה"נקיות" שלך לא שונות מהותית מהשאר. תמשיך ככה, זה נדיר.`;
+  } else { gp.style.display="none"; }
+}
+
 /* ---------- discipline guard (live, in modal) ---------- */
 const ICON_ALERT=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>`;
 const ICON_SHIELD=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>`;
@@ -1704,6 +1817,7 @@ function renderAll(){
   renderRules();
   renderWall();
   renderCoach();
+  renderForecast();
   renderOpen();
   renderTilt();
   if($("#dayOverlay").classList.contains("open")) renderDay();
@@ -1976,6 +2090,7 @@ $$(".tab").forEach(t=>t.onclick=()=>{
   $$(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active");
   $$(".view").forEach(v=>v.classList.remove("active"));
   $("#view-"+t.dataset.view).classList.add("active");
+  if(t.dataset.view==="forecast") renderForecast();
 });
 
 /* ---------- 3D holographic engine ---------- */
@@ -2067,6 +2182,7 @@ $("#tmReset").onclick=resetDay;
 $("#tmNotify").onclick=requestNotify;
 $("#timerFab").onclick=toggleRun;
 ["fAccount","fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
+$("#fcHorizon").onchange=renderForecast;
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
