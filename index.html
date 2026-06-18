@@ -283,6 +283,21 @@ tbody tr:last-child td{border-bottom:none}
 .rule-check input{width:18px;height:18px;flex:0 0 auto;accent-color:var(--amber);cursor:pointer}
 .rule-check .none{color:var(--faint);font-size:13px}
 
+/* ===== Accounts ===== */
+.acct-list{display:flex;flex-direction:column;gap:10px}
+.acct-item{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:12px 14px}
+.acct-item .ainfo{flex:1;min-width:0}
+.acct-item .aname{font-size:14px;font-weight:600;outline:none}
+.acct-item .aname[contenteditable="true"]:focus{border-bottom:1px dashed var(--line2)}
+.acct-item .abal{font-size:11.5px;color:var(--faint);margin-top:3px;font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate}
+.acct-item .adel{width:30px;height:30px;flex:0 0 auto;border-radius:8px;display:grid;place-items:center;color:var(--muted);border:1px solid transparent}
+.acct-item .adel:hover{color:var(--red);border-color:var(--red-dim);background:var(--bg)}
+.acct-add{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.acct-add input[type=text]{flex:1;min-width:160px}
+.acct-add input{background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:11px 13px;border-radius:10px;outline:none}
+.acct-add input:focus{border-color:var(--blue)}
+.acct-add input.num{width:130px}
+
 /* ===== Day detail ===== */
 #overlay{z-index:110}
 .cal-cell.has{cursor:pointer}
@@ -413,6 +428,9 @@ tbody tr:last-child td{border-bottom:none}
 
   <!-- global filters -->
   <div class="filters" id="filters">
+    <label>חשבון</label>
+    <select id="fAccount"></select>
+    <button class="chip-clear" id="acctManage" title="ניהול חשבונות נוסטרו">⚙ חשבונות</button>
     <label>מכשיר</label>
     <select id="fInstrument"><option value="">הכל</option></select>
     <label>סשן</label>
@@ -547,6 +565,10 @@ tbody tr:last-child td{border-bottom:none}
       <div class="guard" id="guard"></div>
       <div class="form-grid">
         <div class="field">
+          <label>חשבון נוסטרו</label>
+          <select id="fldAccount"></select>
+        </div>
+        <div class="field">
           <label>תאריך ושעה</label>
           <input type="datetime-local" id="fldDate">
         </div>
@@ -605,6 +627,10 @@ tbody tr:last-child td{border-bottom:none}
             <option>Reversal</option><option>Breakout</option><option>Pullback</option>
             <option>Range</option><option>Trend</option>
           </datalist>
+        </div>
+        <div class="field full">
+          <label>על מה נכנסתי ולמה? (התזה לעסקה)</label>
+          <textarea id="fldReason" placeholder="מה ראיתי שנתן לי כניסה? (טריגר, רמה, חדשות, אינדיקטור…) ולמה החלטתי להיכנס דווקא כאן?"></textarea>
         </div>
 
         <div class="live-calc">
@@ -674,6 +700,24 @@ tbody tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<!-- ============ ACCOUNTS MODAL ============ -->
+<div class="overlay" id="acctOverlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-h">
+      <h2>חשבונות נוסטרו</h2>
+      <button id="acctClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-b">
+      <div class="acct-list" id="acctList"></div>
+      <div class="acct-add">
+        <input type="text" id="acctName" placeholder="שם החשבון (לדוגמה: Apex 50K, IBKR ראשי…)" maxlength="60">
+        <input type="number" class="num" id="acctStart" placeholder="יתרת פתיחה $" step="100">
+        <button class="btn btn-primary" id="acctAddBtn">הוסף</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <input type="file" id="importFile" accept="application/json" style="display:none">
 <div class="toast" id="toast"></div>
 
@@ -737,6 +781,24 @@ function loadRules(){
 }
 function saveRules(){ Store.set(RULES_KEY, JSON.stringify(rules)); }
 
+/* ---------- accounts (nostro) ---------- */
+let accounts = [];
+const ACCT_KEY = "nasdaq_accounts_v1";
+function loadAccounts(){
+  let a=null;
+  try { a = JSON.parse(Store.get(ACCT_KEY) || "null"); } catch(e){}
+  if(!Array.isArray(a) || !a.length){ accounts = [{id:uid(),name:"חשבון ראשי",start:0}]; saveAccounts(); }
+  else accounts = a.filter(x=>x && x.id && typeof x.name==="string");
+}
+function saveAccounts(){ Store.set(ACCT_KEY, JSON.stringify(accounts)); }
+function migrateAccounts(){
+  const def = accounts[0] && accounts[0].id;
+  let changed=false;
+  trades.forEach(t=>{ if(!t.account || !accounts.some(a=>a.id===t.account)){ t.account=def; changed=true; } });
+  if(changed) save();
+}
+const acctName = id => { const a=accounts.find(x=>x.id===id); return a?a.name:"—"; };
+
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -767,8 +829,9 @@ const dayKey = iso => { const d=new Date(iso); return d.getFullYear()+"-"+String
 
 /* ---------- filters ---------- */
 function getFiltered(){
-  const fi=$("#fInstrument").value, fse=$("#fSession").value, fst=$("#fSetup").value, fr=$("#fRange").value;
+  const fa=$("#fAccount").value, fi=$("#fInstrument").value, fse=$("#fSession").value, fst=$("#fSetup").value, fr=$("#fRange").value;
   let list = trades.slice();
+  if(fa) list=list.filter(t=>t.account===fa);
   if(fi) list=list.filter(t=>t.instrument===fi);
   if(fse) list=list.filter(t=>t.session===fse);
   if(fst) list=list.filter(t=>(t.setup||"")===fst);
@@ -952,12 +1015,13 @@ function renderDay(){
   el.innerHTML=list.map(t=>{
     const p=pnlOf(t), r=rOf(t), dt=new Date(t.date);
     const tm=String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0");
-    const sub=`${t.entry} → ${t.exit}`+(t.setup?" · "+escapeHtml(t.setup):"")+(r!=null?" · "+sign(r)+r.toFixed(2)+"R":"");
+    const sub=`${t.entry} → ${t.exit}`+(t.setup?" · "+escapeHtml(t.setup):"")+(r!=null?" · "+sign(r)+r.toFixed(2)+"R":"")+" · "+escapeHtml(acctName(t.account));
     return `<div class="day-trade">
       <div class="dt-time">${tm}</div>
       <div class="dt-main">
         <div><span class="dir-${t.direction}">${t.direction==="long"?"לונג":"שורט"}</span> <span class="num" style="font-weight:600">${escapeHtml(t.instrument)}</span> <span class="num dim">×${t.contracts}</span></div>
         <div class="dt-sub">${sub}</div>
+        ${t.reason?`<div class="dt-sub" style="color:var(--muted);white-space:normal">💬 ${escapeHtml(t.reason)}</div>`:""}
       </div>
       <div class="dt-pnl ${clsPN(p)}">${sign(p)+fmtMoney2(p)}</div>
       <div class="row-act">
@@ -1061,8 +1125,9 @@ function renderTrades(){
     const dd=String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
     const tm=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
     const stars="★".repeat(t.rating||0);
-    return `<tr>
+    return `<tr${t.reason?` title="${escapeHtml(t.reason)}"`:''}>
       <td><span class="num">${dd}</span> <span class="dim num" style="font-size:11px">${tm}</span></td>
+      <td><span class="dim" style="font-size:12px">${escapeHtml(acctName(t.account))}</span></td>
       <td><span class="num" style="font-weight:600">${t.instrument}</span></td>
       <td><span class="dir-${t.direction}">${t.direction==="long"?"לונג":"שורט"}</span></td>
       <td><span class="num">${t.contracts}</span></td>
@@ -1080,7 +1145,7 @@ function renderTrades(){
   }).join("");
   el.innerHTML=`<div class="table-scroll"><table>
     <thead><tr>
-      <th>תאריך</th><th>מכשיר</th><th>כיוון</th><th>חוזים</th><th>כניסה→יציאה</th>
+      <th>תאריך</th><th>חשבון</th><th>מכשיר</th><th>כיוון</th><th>חוזים</th><th>כניסה→יציאה</th>
       <th>P&L</th><th>R</th><th>סטאפ</th><th>סשן</th><th>איכות</th><th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
@@ -1275,6 +1340,52 @@ function populateFilterOptions(){
   sel.value=cur;
 }
 
+/* ---------- accounts UI ---------- */
+function buildAccountOptions(){
+  const cur=$("#fAccount").value;
+  $("#fAccount").innerHTML=`<option value="">כל החשבונות</option>`+accounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
+  $("#fAccount").value = accounts.some(a=>a.id===cur)?cur:"";
+  const curF=$("#fldAccount").value;
+  $("#fldAccount").innerHTML=accounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
+  if(accounts.some(a=>a.id===curF)) $("#fldAccount").value=curF;
+}
+function renderAccounts(){
+  const el=$("#acctList"); if(!el) return;
+  el.innerHTML=accounts.map(a=>{
+    const mine=trades.filter(t=>t.account===a.id);
+    const net=mine.reduce((s,t)=>s+pnlOf(t),0);
+    const bal=(a.start||0)+net;
+    return `<div class="acct-item">
+      <div class="ainfo">
+        <div class="aname" contenteditable="true" spellcheck="false" data-id="${a.id}">${escapeHtml(a.name)}</div>
+        <div class="abal">יתרה: ${fmtMoney2(bal)} · נטו <span class="${clsPN(net)}">${sign(net)+fmtMoney(net)}</span> · ${mine.length} עסק׳</div>
+      </div>
+      <button class="adel" data-id="${a.id}" title="מחק חשבון"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+    </div>`;
+  }).join("");
+  $$("#acctList .aname").forEach(node=>{
+    node.addEventListener("blur",()=>{ const a=accounts.find(x=>x.id===node.dataset.id); if(!a)return; const v=node.textContent.trim(); if(v){ a.name=v; saveAccounts(); buildAccountOptions(); renderAll(); } else node.textContent=a.name; });
+    node.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); node.blur(); } });
+  });
+  $$("#acctList .adel").forEach(b=>b.onclick=()=>delAccount(b.dataset.id));
+}
+function addAccount(){
+  const name=$("#acctName").value.trim(); if(!name) return;
+  const start=parseFloat($("#acctStart").value)||0;
+  accounts.push({id:uid(),name,start}); saveAccounts();
+  $("#acctName").value=""; $("#acctStart").value="";
+  buildAccountOptions(); renderAccounts(); renderAll();
+}
+function delAccount(id){
+  const cnt=trades.filter(t=>t.account===id).length;
+  if(cnt>0){ toast("יש "+cnt+" עסקאות בחשבון — אי אפשר למחוק"); return; }
+  if(accounts.length<=1){ toast("חייב להישאר לפחות חשבון אחד"); return; }
+  if(!confirm("למחוק את החשבון?")) return;
+  accounts=accounts.filter(a=>a.id!==id); saveAccounts(); buildAccountOptions(); renderAccounts(); renderAll();
+}
+function openAcct(){ renderAccounts(); $("#acctOverlay").classList.add("open"); document.body.style.overflow="hidden"; }
+function closeAcct(){ $("#acctOverlay").classList.remove("open"); document.body.style.overflow=""; }
+
 /* ---------- modal ---------- */
 function buildInstrumentOptions(){
   $("#fldInstrument").innerHTML=Object.entries(INSTRUMENTS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("");
@@ -1328,6 +1439,8 @@ function openModal(id, prefillDate){
     $("#fldEmoBefore").value=t.emoBefore||"רגוע";
     $("#fldPlan").value=t.plan||"yes";
     $("#fldNotes").value=t.notes||"";
+    $("#fldAccount").value=t.account||(accounts[0]&&accounts[0].id)||"";
+    $("#fldReason").value=t.reason||"";
     setDir(t.direction);
     (t.mistakes||[]).forEach(m=>{ draftMistakes.add(m); const c=document.querySelector(`#mistakeChips .chip[data-m="${m}"]`); if(c)c.classList.add("on"); });
     draftRating=t.rating||0;
@@ -1338,6 +1451,8 @@ function openModal(id, prefillDate){
     $("#fldEntry").value=""; $("#fldExit").value=""; $("#fldStop").value=""; $("#fldTarget").value="";
     $("#fldFees").value=0; $("#fldSession").value="פתיחה (Open)"; $("#fldSetup").value="";
     $("#fldEmoBefore").value="רגוע"; $("#fldPlan").value="yes"; $("#fldNotes").value="";
+    $("#fldAccount").value=$("#fAccount").value || (accounts[0]&&accounts[0].id) || "";
+    $("#fldReason").value="";
     setDir("long");
   }
   paintStars(); buildRuleChecklist(); liveCalc(); updateGuard();
@@ -1362,8 +1477,10 @@ function saveTrade(){
     stop: isNaN(stop)?null:stop,
     target: isNaN(target)?null:target,
     fees: parseFloat($("#fldFees").value)||0,
+    account: $("#fldAccount").value,
     session: $("#fldSession").value,
     setup: $("#fldSetup").value.trim(),
+    reason: $("#fldReason").value.trim(),
     emoBefore: $("#fldEmoBefore").value,
     plan: $("#fldPlan").value,
     mistakes: [...draftMistakes],
@@ -1384,7 +1501,8 @@ function delTrade(id){
 
 /* ---------- export / import ---------- */
 function exportJSON(){
-  const blob=new Blob([JSON.stringify(trades,null,2)],{type:"application/json"});
+  const payload={v:2, exportedAt:new Date().toISOString(), accounts, rules, trades};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
   a.download="nasdaq-journal-"+new Date().toISOString().slice(0,10)+".json";
@@ -1393,8 +1511,18 @@ function exportJSON(){
 }
 function importJSON(file){
   const r=new FileReader();
-  r.onload=()=>{ try{ const data=JSON.parse(r.result); if(!Array.isArray(data)) throw 0;
-    if(confirm("לשחזר "+data.length+" עסקאות? זה יחליף את הקיים.")){ trades=data; save(); renderAll(); toast("שוחזר ✓"); }
+  r.onload=()=>{ try{
+    const data=JSON.parse(r.result);
+    let imp;
+    if(Array.isArray(data)) imp={trades:data};                       // legacy backup (trades only)
+    else if(data && Array.isArray(data.trades)) imp=data;            // v2 backup (trades+accounts+rules)
+    else throw 0;
+    if(confirm("לשחזר "+imp.trades.length+" עסקאות? זה יחליף את הקיים.")){
+      trades=imp.trades;
+      if(Array.isArray(imp.accounts) && imp.accounts.length){ accounts=imp.accounts.filter(a=>a&&a.id&&typeof a.name==="string"); saveAccounts(); }
+      if(Array.isArray(imp.rules) && imp.rules.length){ rules=imp.rules.filter(x=>x&&typeof x.text==="string"); saveRules(); }
+      migrateAccounts(); save(); buildAccountOptions(); renderAll(); toast("שוחזר ✓");
+    }
   }catch(e){ toast("קובץ לא תקין"); } };
   r.readAsText(file);
 }
@@ -1475,10 +1603,15 @@ $("#dayNext").onclick=()=>shiftDay(1);
 $("#dayAdd").onclick=()=>{ if(currentDayKey) openModal(null,currentDayKey); };
 $("#ruleAddBtn").onclick=addRule;
 $("#ruleInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addRule(); } });
-["fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
+$("#acctManage").onclick=openAcct;
+$("#acctClose").onclick=closeAcct;
+$("#acctOverlay").onclick=e=>{ if(e.target.id==="acctOverlay") closeAcct(); };
+$("#acctAddBtn").onclick=addAccount;
+$("#acctName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addAccount(); } });
+["fAccount","fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){ if($("#overlay").classList.contains("open")) closeModal(); else if($("#dayOverlay").classList.contains("open")) closeDay(); }
+  if(e.key==="Escape"){ if($("#overlay").classList.contains("open")) closeModal(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
   if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && !$("#dayOverlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA" && document.activeElement.getAttribute("contenteditable")!=="true") openModal();
 });
 
@@ -1486,8 +1619,11 @@ document.addEventListener("keydown",e=>{
 buildInstrumentOptions();
 buildMistakeChips();
 buildStars();
+loadAccounts();
 load();
+migrateAccounts();
 loadRules();
+buildAccountOptions();
 renderAll();
 init3d();
 </script>
