@@ -313,6 +313,19 @@ tbody tr:last-child td{border-bottom:none}
 .timer-display.over{border-color:var(--red-dim);color:#ffd5d6}
 .timer-display .sub{display:block;font-family:'Heebo',sans-serif;direction:rtl;font-size:12px;color:var(--faint);font-weight:500;margin-top:6px}
 
+/* ===== Floating timer button ===== */
+.timer-fab{position:fixed;bottom:18px;inset-inline-start:16px;z-index:90;display:inline-flex;align-items:center;gap:9px;padding:11px 15px;border-radius:999px;background:var(--panel);border:1px solid var(--line2);color:var(--faint);font-weight:700;box-shadow:0 10px 28px rgba(0,0,0,.45);transition:transform .18s,border-color .18s,color .18s}
+.timer-fab svg{width:18px;height:18px;flex:0 0 auto}
+.timer-fab .fab-txt{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate;font-size:14px}
+.timer-fab:hover{transform:translateY(-2px)}
+.timer-fab:active{transform:translateY(0) scale(.96)}
+.timer-fab.off{color:var(--faint);border-color:var(--line)}
+.timer-fab.live{color:var(--green);border-color:var(--green);box-shadow:0 0 0 1px rgba(52,211,153,.25),0 10px 28px rgba(0,0,0,.45)}
+.timer-fab.grace{color:#f3dca0;border-color:var(--amber)}
+.timer-fab.over{color:var(--red);border-color:var(--red);animation:fabPulse 1.6s ease-in-out infinite}
+@keyframes fabPulse{0%,100%{box-shadow:0 0 0 0 rgba(251,110,114,.45),0 10px 28px rgba(0,0,0,.45)}50%{box-shadow:0 0 0 7px rgba(251,110,114,0),0 10px 28px rgba(0,0,0,.45)}}
+@media(max-width:480px){ .timer-fab{bottom:14px;inset-inline-start:12px;padding:10px 13px} .timer-fab .fab-txt{font-size:13px} }
+
 /* ===== Accounts ===== */
 .acct-list{display:flex;flex-direction:column;gap:10px}
 .acct-item{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--line);border-radius:11px;padding:12px 14px}
@@ -773,6 +786,12 @@ tbody tr:last-child td{border-bottom:none}
 </div>
 
 <input type="file" id="importFile" accept="application/json" style="display:none">
+
+<button id="timerFab" class="timer-fab off" title="טיימר מסחר — הקש להפעלה/כיבוי">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/></svg>
+  <span class="fab-txt">טיימר</span>
+</button>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1146,25 +1165,32 @@ function fireCutoff(){
   toast("⏱ המסחר נגמר להיום — אסור להיכנס לעסקאות חדשות");
 }
 function fmtCountdown(sec){ sec=Math.max(0,Math.round(sec)); const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60; return (h>0?pad2(h)+":":"")+pad2(m)+":"+pad2(s); }
+function setFab(cls,txt){ const f=$("#timerFab"); if(!f) return; f.className="timer-fab "+cls; const t=f.querySelector(".fab-txt"); if(t) t.textContent=txt; }
 function tickTimer(){
-  const el=$("#tmDisplay"); if(!el) return;
-  if(!timer.enabled){ el.className="timer-display"; el.innerHTML="הטיימר כבוי<span class='sub'>הפעל כדי לקבל התראת סוף יום מסחר</span>"; return; }
+  const el=$("#tmDisplay");
+  if(!timer.enabled){
+    if(el){ el.className="timer-display"; el.innerHTML="הטיימר כבוי<span class='sub'>הפעל כדי לקבל התראת סוף יום מסחר</span>"; }
+    setFab("off","טיימר כבוי");
+    return;
+  }
   const now=new Date();
   const today=dayKey(now.toISOString());
   const nowSec=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
   const cutSec=hmToMin(timer.cutoff)*60;
   const graceSec=cutSec+(timer.grace||0)*60;
   if(nowSec<cutSec){
-    el.className="timer-display live";
-    el.innerHTML=fmtCountdown(cutSec-nowSec)+"<span class='sub'>עד סיום המסחר ("+timer.cutoff+")</span>";
+    const cd=fmtCountdown(cutSec-nowSec);
+    if(el){ el.className="timer-display live"; el.innerHTML=cd+"<span class='sub'>עד סיום המסחר ("+timer.cutoff+")</span>"; }
+    setFab("live",cd);
   } else {
     if(timer.firedOn!==today){ timer.firedOn=today; saveTimer(); fireCutoff(); }
     if(nowSec<graceSec){
-      el.className="timer-display grace";
-      el.innerHTML="🟡 "+fmtCountdown(graceSec-nowSec)+"<span class='sub'>חלון ניהול — רק לסגור עסקה פתוחה</span>";
+      const cd=fmtCountdown(graceSec-nowSec);
+      if(el){ el.className="timer-display grace"; el.innerHTML="🟡 "+cd+"<span class='sub'>חלון ניהול — רק לסגור עסקה פתוחה</span>"; }
+      setFab("grace",cd);
     } else {
-      el.className="timer-display over";
-      el.innerHTML="🔴 המסחר נגמר להיום<span class='sub'>אסור להיכנס לעסקאות חדשות</span>";
+      if(el){ el.className="timer-display over"; el.innerHTML="🔴 המסחר נגמר להיום<span class='sub'>אסור להיכנס לעסקאות חדשות</span>"; }
+      setFab("over","סגור");
     }
   }
 }
@@ -1796,6 +1822,7 @@ $("#tmCutoff").onchange=()=>{ timer.cutoff=$("#tmCutoff").value||"16:00"; timer.
 $("#tmGrace").onchange=()=>{ timer.grace=Math.max(0,Math.min(60,parseInt($("#tmGrace").value)||0)); saveTimer(); tickTimer(); renderAll(); };
 $("#tmEnabled").onchange=()=>{ timer.enabled=$("#tmEnabled").checked; if(timer.enabled && window.Notification && Notification.permission==="default") requestNotify(); saveTimer(); tickTimer(); renderAll(); };
 $("#tmNotify").onclick=requestNotify;
+$("#timerFab").onclick=()=>{ timer.enabled=!timer.enabled; if(timer.enabled && window.Notification && Notification.permission==="default") requestNotify(); saveTimer(); syncTimerInputs(); tickTimer(); toast(timer.enabled?"⏱ טיימר הופעל":"טיימר כובה"); renderAll(); };
 ["fAccount","fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
