@@ -133,6 +133,9 @@ a{color:var(--blue);text-decoration:none}
 .lock-box .btn-primary{width:100%;justify-content:center;padding:12px}
 .lock-link{font-size:12px;color:var(--faint);background:none;border:none;margin-top:2px}
 .lock-link:hover{color:var(--muted)}
+.rec-key{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate;font-size:19px;font-weight:700;letter-spacing:2px;text-align:center;color:var(--amber);background:var(--bg2);border:1px dashed var(--amber);border-radius:11px;padding:16px 12px;word-break:break-all;line-height:1.5}
+.rec-actions{display:flex;gap:10px;margin-top:14px}
+.rec-actions .btn{flex:1;justify-content:center}
 .breathe-overlay{align-items:center;justify-content:center;background:radial-gradient(circle at 50% 42%, rgba(20,42,74,.72), rgba(4,7,14,.94));backdrop-filter:blur(10px)}
 .breathe-box{display:flex;flex-direction:column;align-items:center;gap:20px;padding:24px;text-align:center;max-width:460px;width:100%}
 .breathe-msg{font-size:16px;font-weight:600;color:var(--txt);line-height:1.65}
@@ -521,6 +524,9 @@ tbody tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="spacer"></div>
+    <button class="btn btn-ghost" id="btnRecovery" title="מפתח שחזור">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.5 12.5 20 3"/><path d="m16 7 3 3"/><path d="m19 4 2 2"/></svg>
+    </button>
     <button class="btn btn-ghost" id="btnLock" title="נעל את הכספת">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
     </button>
@@ -977,6 +983,26 @@ tbody tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<!-- ============ RECOVERY KEY MODAL ============ -->
+<div class="overlay" id="recoveryOverlay">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-h">
+      <h2>מפתח שחזור 🔑</h2>
+      <button id="recClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-b">
+      <p style="font-size:13.5px;color:var(--muted);line-height:1.6;margin-bottom:14px">אם תשכח את קוד הכספת — <b>זה</b> מה שיחזיר אותך פנימה. שלח אותו לעצמך במייל ושמור.</p>
+      <div class="rec-key" id="recKey"></div>
+      <div class="rec-actions">
+        <button class="btn btn-enter" id="recEmail">📧 שלח לעצמי במייל</button>
+        <button class="btn btn-ghost" id="recCopy">העתק</button>
+      </div>
+      <p style="font-size:12px;color:#ffd5d6;line-height:1.55;margin-top:14px">⚠️ מי שמשיג את המפתח הזה <b>וגם</b> את המכשיר — נכנס. אל תשתף אותו, ואל תשמור אותו ליד הקוד.</p>
+    </div>
+    <div class="modal-f"><button class="btn btn-primary" id="recDone">שמרתי — סיום</button></div>
+  </div>
+</div>
+
 <!-- ============ PASSPHRASE MODAL ============ -->
 <div class="overlay" id="cryptoOverlay">
   <div class="modal" style="max-width:420px">
@@ -1051,13 +1077,16 @@ async function aesDecrypt(key, obj){ const pt=await crypto.subtle.decrypt({name:
 function isEnvelope(str){ try{ const o=JSON.parse(str); return o && typeof o==="object" && typeof o.iv==="string" && typeof o.ct==="string"; }catch(e){ return false; } }
 function passStrength(p){ let s=0; if(p.length>=8)s++; if(p.length>=12)s++; if(/[a-z]/.test(p)&&/[A-Z]/.test(p))s++; if(/\d/.test(p))s++; if(/[^A-Za-z0-9]/.test(p))s++; return Math.min(4,s); }
 function passOk(p){ return p.length>=8 && passStrength(p)>=2; }
+const REC_ALPH="0123456789ABCDEFGHJKMNPQRSTVWXYZ";   // Crockford base32 (no I L O U)
+function genRecoveryKey(){ const b=randBytes(15); let bits=0,val=0,o=""; for(const x of b){ val=(val<<8)|x; bits+=8; while(bits>=5){ o+=REC_ALPH[(val>>>(bits-5))&31]; bits-=5; } } return o.match(/.{1,4}/g).join("-"); }
+const normRec = s => String(s||"").toUpperCase().replace(/[^0-9A-Z]/g,"");
 
-/* ---------- encrypted-at-rest vault (IndexedDB + localStorage mirror) ---------- */
+/* ---------- encrypted-at-rest vault (DEK envelope · passcode + recovery key) ---------- */
 const Store = (() => {
-  const cache = {};        // decrypted, in-memory, synchronous — only populated after unlock
+  const cache = {};        // decrypted, in-memory, synchronous — only after unlock
   let raw = {};            // raw persisted strings (ciphertext envelopes, legacy plaintext, or vault meta)
   let lsOk = true; try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); } catch(e){ lsOk=false; }
-  let db=null, masterKey=null, writeChain=Promise.resolve();
+  let db=null, masterKey=null, dekRaw=null, writeChain=Promise.resolve();
   const PREFIX="nasdaq_", META="__vault__";
   function openDB(){ return new Promise(res=>{ try{ const r=indexedDB.open("nasdaq_journal_db",1); r.onupgradeneeded=e=>{ e.target.result.createObjectStore("kv"); }; r.onsuccess=e=>res(e.target.result); r.onerror=()=>res(null);}catch(e){res(null);} }); }
   function idbAll(){ return new Promise(res=>{ if(!db) return res({}); try{ const out={}; const cur=db.transaction("kv","readonly").objectStore("kv").openCursor(); cur.onsuccess=e=>{const c=e.target.result; if(c){out[c.key]=c.value; c.continue();} else res(out);}; cur.onerror=()=>res(out);}catch(e){res({});} }); }
@@ -1066,34 +1095,65 @@ const Store = (() => {
   function persistRaw(k,str){ raw[k]=str; if(lsOk){try{localStorage.setItem(k,str);}catch(e){}} idbPut(k,str); }
   function removeRaw(k){ delete raw[k]; if(lsOk){try{localStorage.removeItem(k);}catch(e){}} idbDel(k); }
   function dataKeys(){ return Object.keys(raw).filter(k=>k!==META && k.indexOf(PREFIX)===0); }
+  const importDek = r => crypto.subtle.importKey("raw", r, {name:"AES-GCM"}, false, ["encrypt","decrypt"]);
   async function persistEnc(k,v){ persistRaw(k, JSON.stringify(await aesEncrypt(masterKey, v))); }
+  async function decryptAll(){ for(const k of dataKeys()){ try{ cache[k]=isEnvelope(raw[k]) ? await aesDecrypt(masterKey, JSON.parse(raw[k])) : raw[k]; }catch(e){} } }
+  async function writePassMeta(pass){              // (re)wrap the DEK under a passcode; preserve recovery wrap
+    const saltPass=randBytes(16); const KEKp=await deriveKey(pass, saltPass, KDF_ITER);
+    const meta={ ver:2, iter:KDF_ITER, saltPass:b64(saltPass), wrapPass:await aesEncrypt(KEKp, b64(dekRaw)) };
+    let prev={}; try{ prev=JSON.parse(raw[META])||{}; }catch(e){}
+    if(prev.wrapRec){ meta.saltRec=prev.saltRec; meta.wrapRec=prev.wrapRec; }
+    persistRaw(META, JSON.stringify(meta));
+  }
   return {
     async ready(){
       db=await openDB(); raw=await idbAll();
       if(lsOk){ try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k===META || (k && k.indexOf(PREFIX)===0)) raw[k]=localStorage.getItem(k); } }catch(e){} }
-      for(const k in raw){ idbPut(k,raw[k]); if(lsOk){try{localStorage.setItem(k,raw[k]);}catch(e){}} }   // mirror both ways
+      for(const k in raw){ idbPut(k,raw[k]); if(lsOk){try{localStorage.setItem(k,raw[k]);}catch(e){}} }
     },
     hasVault(){ return !!raw[META]; },
-    hasLegacy(){ return dataKeys().some(k=>!isEnvelope(raw[k])); },
-    async setupPasscode(pass){
-      const salt=randBytes(16); masterKey=await deriveKey(pass,salt,KDF_ITER);
-      for(const k of dataKeys()){ if(!isEnvelope(raw[k])){ cache[k]=raw[k]; await persistEnc(k, raw[k]); } else { cache[k]=await aesDecrypt(masterKey, JSON.parse(raw[k])); } }
-      const v=await aesEncrypt(masterKey, "nasdaq-ok");
-      persistRaw(META, JSON.stringify({salt:b64(salt), iter:KDF_ITER, v}));   // written last = migration committed
+    hasRecovery(){ try{ return !!JSON.parse(raw[META]).wrapRec; }catch(e){ return false; } },
+    async setupPasscode(pass){                     // fresh vault or migrate legacy plaintext
+      dekRaw=randBytes(32); masterKey=await importDek(dekRaw);
+      for(const k of dataKeys()){ if(!isEnvelope(raw[k])){ cache[k]=raw[k]; await persistEnc(k, raw[k]); } }
+      await writePassMeta(pass);
     },
     async unlock(pass){
       let meta; try{ meta=JSON.parse(raw[META]); }catch(e){ return false; }
+      if(meta.wrapPass){                            // v2 (DEK envelope)
+        const KEKp=await deriveKey(pass, ub64(meta.saltPass), meta.iter||KDF_ITER);
+        try{ dekRaw=ub64(await aesDecrypt(KEKp, meta.wrapPass)); }catch(e){ return false; }
+        masterKey=await importDek(dekRaw); await decryptAll(); return true;
+      }
+      // v1 legacy vault (key derived directly from passcode) → unlock then upgrade to DEK
       const key=await deriveKey(pass, ub64(meta.salt), meta.iter||KDF_ITER);
       try{ if(await aesDecrypt(key, meta.v)!=="nasdaq-ok") return false; }catch(e){ return false; }
-      masterKey=key;
-      for(const k of dataKeys()){ try{ cache[k]=isEnvelope(raw[k]) ? await aesDecrypt(masterKey, JSON.parse(raw[k])) : raw[k]; }catch(e){} }
+      masterKey=key; await decryptAll();
+      dekRaw=randBytes(32); masterKey=await importDek(dekRaw);
+      for(const k of dataKeys()){ await persistEnc(k, cache[k]); }   // re-encrypt under the DEK
+      await writePassMeta(pass);
       return true;
     },
+    async enrollRecovery(recKey){                   // requires unlocked; returns true
+      if(!dekRaw) return false;
+      let meta; try{ meta=JSON.parse(raw[META]); }catch(e){ return false; }
+      const saltRec=randBytes(16); const KEKr=await deriveKey(normRec(recKey), saltRec, KDF_ITER);
+      meta.saltRec=b64(saltRec); meta.wrapRec=await aesEncrypt(KEKr, b64(dekRaw));
+      persistRaw(META, JSON.stringify(meta)); return true;
+    },
+    async recoverWithKey(recKey){                   // unlock via recovery key (then caller sets new passcode)
+      let meta; try{ meta=JSON.parse(raw[META]); }catch(e){ return false; }
+      if(!meta.wrapRec) return false;
+      const KEKr=await deriveKey(normRec(recKey), ub64(meta.saltRec), meta.iter||KDF_ITER);
+      try{ dekRaw=ub64(await aesDecrypt(KEKr, meta.wrapRec)); }catch(e){ return false; }
+      masterKey=await importDek(dekRaw); await decryptAll(); return true;
+    },
+    async setNewPasscode(pass){ if(!dekRaw) return false; await writePassMeta(pass); return true; },
     isUnlocked(){ return !!masterKey; },
-    lock(){ masterKey=null; for(const k in cache) delete cache[k]; },
+    lock(){ masterKey=null; dekRaw=null; for(const k in cache) delete cache[k]; },
     get(k){ return (k in cache) ? cache[k] : null; },
     set(k,v){ cache[k]=v; if(!masterKey) return; const val=v; writeChain=writeChain.then(()=>persistEnc(k,val)).catch(()=>{}); },
-    async wipe(){ for(const k of Object.keys(raw)) removeRaw(k); for(const k in cache) delete cache[k]; masterKey=null; }
+    async wipe(){ for(const k of Object.keys(raw)) removeRaw(k); for(const k in cache) delete cache[k]; masterKey=null; dekRaw=null; }
   };
 })();
 const KEY = "nasdaq_journal_v1";
@@ -2401,49 +2461,103 @@ function init3d(){
 }
 
 /* ---------- vault lock screen ---------- */
-let lockTimer=null, lockMode="unlock", unlockResolve=null;
+let lockTimer=null, lockMode="unlock", unlockResolve=null, pendingRecoveryKey=null;
 const LOCK_MS=5*60*1000;
 function showLock(mode){
   lockMode=mode;
   $("#lockOverlay").classList.remove("hidden");
   $("#lockErr").textContent=""; $("#lockPass").value=""; $("#lockPass2").value=""; $("#lockMeter").className="lock-meter";
-  if(mode==="setup"){
-    $("#lockTitle").textContent="צור קוד כניסה";
-    $("#lockSub").innerHTML="הקוד יצפין את כל היומן במכשיר. <b>אין שחזור אם תשכח אותו</b> — שמור אותו במקום בטוח.";
-    $("#lockPass").placeholder="קוד חדש (8+ תווים)";
-    $("#lockPass2").style.display=""; $("#lockMeter").style.display="";
-    $("#lockBtn").textContent="הפעל כספת"; $("#lockForgot").style.display="none";
-  } else {
+  const meter=$("#lockMeter"), p2=$("#lockPass2"), forgot=$("#lockForgot");
+  if(mode==="setup" || mode==="setnew"){
+    $("#lockTitle").textContent = mode==="setnew" ? "קוד חדש" : "צור קוד כניסה";
+    $("#lockSub").innerHTML = mode==="setnew" ? "שוחזר בהצלחה ✓ — בחר קוד כניסה חדש." : "הקוד יצפין את כל היומן במכשיר. נקבל מפתח שחזור בסוף.";
+    $("#lockPass").type="password"; $("#lockPass").placeholder="קוד חדש (8+ תווים)";
+    p2.style.display=""; p2.placeholder="אישור קוד"; meter.style.display="";
+    $("#lockBtn").textContent = mode==="setnew" ? "שמור קוד" : "הפעל כספת";
+    forgot.style.display="none";
+  } else if(mode==="recover"){
+    $("#lockTitle").textContent="שחזור עם מפתח 🔑";
+    $("#lockSub").textContent="הזן את מפתח השחזור ששלחת לעצמך במייל.";
+    $("#lockPass").type="text"; $("#lockPass").placeholder="XXXX-XXXX-XXXX-…";
+    p2.style.display="none"; meter.style.display="none";
+    $("#lockBtn").textContent="שחזר"; forgot.textContent="מחק הכל והתחל מחדש"; forgot.style.display="";
+  } else {  // unlock
     $("#lockTitle").textContent="כספת היומן 🔒";
     $("#lockSub").textContent="הזן את קוד הכניסה כדי לפתוח את היומן.";
-    $("#lockPass").placeholder="קוד כניסה";
-    $("#lockPass2").style.display="none"; $("#lockMeter").style.display="none";
-    $("#lockBtn").textContent="פתח"; $("#lockForgot").style.display="";
+    $("#lockPass").type="password"; $("#lockPass").placeholder="קוד כניסה";
+    p2.style.display="none"; meter.style.display="none";
+    $("#lockBtn").textContent="פתח";
+    forgot.textContent="שכחתי את הקוד"; forgot.style.display = Store.hasRecovery() ? "" : "";
   }
   setTimeout(()=>$("#lockPass").focus(),60);
 }
 function hideLock(){ $("#lockOverlay").classList.add("hidden"); }
 function unlockFlow(){ return new Promise(resolve=>{ unlockResolve=resolve; showLock(Store.hasVault()?"unlock":"setup"); }); }
+function finishUnlock(){
+  hideLock();
+  if(unlockResolve){ const r=unlockResolve; unlockResolve=null; r(); }   // initial boot
+  else { bootData(); }                                                   // re-unlock after auto-lock
+  resetLockTimer();
+}
 async function lockSubmit(){
   const btn=$("#lockBtn"); if(btn.disabled) return; btn.disabled=true; $("#lockErr").textContent="";
   try{
-    if(lockMode==="setup"){
+    if(lockMode==="setup" || lockMode==="setnew"){
       const p=$("#lockPass").value, p2=$("#lockPass2").value;
       if(!passOk(p)){ $("#lockErr").textContent="קוד חלש מדי — לפחות 8 תווים, אותיות וספרות"; return; }
       if(p!==p2){ $("#lockErr").textContent="הקודים לא תואמים"; return; }
-      $("#lockSub").textContent="מצפין את היומן… רגע 🔐";
-      await Store.setupPasscode(p);
-    } else {
-      $("#lockSub").textContent="פותח…";
-      const ok=await Store.unlock($("#lockPass").value);
-      if(!ok){ $("#lockErr").textContent="קוד שגוי"; $("#lockSub").textContent="הזן את קוד הכניסה כדי לפתוח את היומן."; return; }
+      $("#lockSub").textContent="מצפין… רגע 🔐";
+      if(lockMode==="setup"){ await Store.setupPasscode(p); }
+      else { await Store.setNewPasscode(p); }                 // after recovery
+      // ensure a recovery key exists; offer it
+      const newKey=genRecoveryKey();
+      await Store.enrollRecovery(newKey);
+      pendingRecoveryKey=newKey;
+      finishUnlock();
+      openRecoveryModal(newKey);
+      return;
     }
-    hideLock();
-    if(unlockResolve){ const r=unlockResolve; unlockResolve=null; r(); }   // initial boot
-    else { bootData(); }                                                   // re-unlock after auto-lock
-    resetLockTimer();
+    if(lockMode==="recover"){
+      $("#lockSub").textContent="בודק מפתח…";
+      const ok=await Store.recoverWithKey($("#lockPass").value);
+      if(!ok){ $("#lockErr").textContent="מפתח שחזור שגוי"; $("#lockSub").textContent="הזן את מפתח השחזור ששלחת לעצמך במייל."; return; }
+      showLock("setnew");                                      // recovered → must set a new code
+      return;
+    }
+    // unlock
+    $("#lockSub").textContent="פותח…";
+    const ok=await Store.unlock($("#lockPass").value);
+    if(!ok){ $("#lockErr").textContent="קוד שגוי"; $("#lockSub").textContent="הזן את קוד הכניסה כדי לפתוח את היומן."; return; }
+    finishUnlock();
   } catch(e){ $("#lockErr").textContent="שגיאה — נסה שוב"; }
   finally { btn.disabled=false; }
+}
+function lockForgot(){
+  if(lockMode==="recover" || !Store.hasRecovery()){
+    if(!confirm("מחיקת הכספת תמחק את כל הדאטה במכשיר. אפשר יהיה לשחזר רק מגיבוי מוצפן. להמשיך?")) return;
+    Store.wipe().then(()=>location.reload());
+  } else { showLock("recover"); }
+}
+
+/* ---------- recovery key modal ---------- */
+function openRecoveryModal(key){
+  $("#recKey").textContent=key;
+  $("#recoveryOverlay").classList.add("open");
+  document.body.style.overflow="hidden";
+}
+function closeRecoveryModal(){ $("#recoveryOverlay").classList.remove("open"); document.body.style.overflow=""; pendingRecoveryKey=null; }
+function emailRecovery(){
+  const key=$("#recKey").textContent;
+  const subject=encodeURIComponent("מפתח שחזור — יומן מסחר");
+  const body=encodeURIComponent("שמור את המייל הזה במקום בטוח.\n\nמפתח השחזור לכספת היומן שלך:\n\n"+key+"\n\nאם תשכח את קוד הכניסה — פתח את האפליקציה, לחץ «שכחתי את הקוד», והזן את המפתח הזה.");
+  location.href="mailto:?subject="+subject+"&body="+body;
+}
+async function showRecoveryKey(){
+  if(!Store.isUnlocked()){ toast("צריך להיות בתוך הכספת"); return; }
+  const key=genRecoveryKey();
+  const ok=await Store.enrollRecovery(key);
+  if(!ok){ toast("שגיאה"); return; }
+  openRecoveryModal(key);
 }
 function lockApp(){
   if(!Store.isUnlocked()) return;
@@ -2480,10 +2594,15 @@ $("#cryptoOverlay").onclick=e=>{ if(e.target.id==="cryptoOverlay") closeCrypto(n
 $("#cryptoPass").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); closeCrypto($("#cryptoPass").value); } });
 $("#lockBtn").onclick=lockSubmit;
 $("#btnLock").onclick=lockApp;
-$("#lockPass").addEventListener("input",()=>{ if(lockMode==="setup") $("#lockMeter").className="lock-meter s"+passStrength($("#lockPass").value); });
-$("#lockPass").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); if(lockMode==="setup"){ $("#lockPass2").focus(); } else lockSubmit(); } });
+$("#btnRecovery").onclick=showRecoveryKey;
+$("#lockPass").addEventListener("input",()=>{ if(lockMode==="setup"||lockMode==="setnew") $("#lockMeter").className="lock-meter s"+passStrength($("#lockPass").value); });
+$("#lockPass").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); if(lockMode==="setup"||lockMode==="setnew"){ $("#lockPass2").focus(); } else lockSubmit(); } });
 $("#lockPass2").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); lockSubmit(); } });
-$("#lockForgot").onclick=async ()=>{ if(!confirm("מחיקת הכספת תמחק את כל הדאטה במכשיר. אפשר יהיה לשחזר רק מגיבוי מוצפן. להמשיך?")) return; await Store.wipe(); location.reload(); };
+$("#lockForgot").onclick=lockForgot;
+$("#recClose").onclick=closeRecoveryModal;
+$("#recDone").onclick=closeRecoveryModal;
+$("#recEmail").onclick=emailRecovery;
+$("#recCopy").onclick=()=>{ const k=$("#recKey").textContent; if(navigator.clipboard){ navigator.clipboard.writeText(k).then(()=>toast("הועתק ✓"),()=>toast("לא ניתן להעתיק")); } else toast("לא ניתן להעתיק"); };
 ["pointerdown","keydown","touchstart"].forEach(ev=>window.addEventListener(ev,resetLockTimer,{passive:true}));
 $("#btn3d").onclick=()=>set3d(!scene3d);
 $("#btnBreathe").onclick=()=>openBreathe();
@@ -2537,7 +2656,7 @@ $("#vStartIn").onchange=()=>{ vision.start=Math.max(100,parseFloat($("#vStartIn"
 $("#vRiskIn").onchange=()=>{ vision.risk=Math.max(0.1,Math.min(20,parseFloat($("#vRiskIn").value)||1)); saveVision(); renderVision(); };
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){ if($("#cryptoOverlay").classList.contains("open")) closeCrypto(null); else if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
+  if(e.key==="Escape"){ if($("#recoveryOverlay").classList.contains("open")) closeRecoveryModal(); else if($("#cryptoOverlay").classList.contains("open")) closeCrypto(null); else if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
   if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && !$("#dayOverlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA" && document.activeElement.getAttribute("contenteditable")!=="true") openModal();
 });
 
@@ -2554,6 +2673,7 @@ document.addEventListener("keydown",e=>{
   setInterval(tickTimer,1000);
   resetLockTimer();                    // start inactivity auto-lock
   registerSW();
+  if(Store.hasVault() && !Store.hasRecovery()) setTimeout(()=>toast("🔑 הגדר מפתח שחזור — האייקון בסרגל העליון"), 1600);
 })();
 </script>
 </body>
