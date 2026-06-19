@@ -524,6 +524,9 @@ tbody tr:last-child td{border-bottom:none}
       </div>
     </div>
     <div class="spacer"></div>
+    <button class="btn btn-ghost" id="btnCloud" title="סנכרון ענן">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 0 0-11.6-1.5A4 4 0 0 0 6.5 19Z"/></svg>
+    </button>
     <button class="btn btn-ghost" id="btnRecovery" title="מפתח שחזור">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.5 12.5 20 3"/><path d="m16 7 3 3"/><path d="m19 4 2 2"/></svg>
     </button>
@@ -1003,6 +1006,17 @@ tbody tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<!-- ============ CLOUD SYNC MODAL ============ -->
+<div class="overlay" id="cloudOverlay">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-h">
+      <h2>☁️ סנכרון ענן</h2>
+      <button id="cloudClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-b" id="cloudBody"></div>
+  </div>
+</div>
+
 <!-- ============ PASSPHRASE MODAL ============ -->
 <div class="overlay" id="cryptoOverlay">
   <div class="modal" style="max-width:420px">
@@ -1152,7 +1166,21 @@ const Store = (() => {
     isUnlocked(){ return !!masterKey; },
     lock(){ masterKey=null; dekRaw=null; for(const k in cache) delete cache[k]; },
     get(k){ return (k in cache) ? cache[k] : null; },
-    set(k,v){ cache[k]=v; if(!masterKey) return; const val=v; writeChain=writeChain.then(()=>persistEnc(k,val)).catch(()=>{}); },
+    set(k,v){ cache[k]=v; if(!masterKey) return; const val=v; writeChain=writeChain.then(()=>persistEnc(k,val)).catch(()=>{}); if(Store.onWrite) Store.onWrite(); },
+    onWrite:null,
+    exportRaw(){ const o={}; for(const k in raw){ if(k===META || k.indexOf(PREFIX)===0) o[k]=raw[k]; } return o; },
+    metaId(){ try{ return JSON.parse(raw[META]).saltPass||""; }catch(e){ return ""; } },
+    async adoptRaw(entries){                          // replace local vault with cloud copy (E2E sync)
+      for(const k of Object.keys(raw)){ if(k===META || k.indexOf(PREFIX)===0) removeRaw(k); }
+      for(const k in entries){ persistRaw(k, entries[k]); }
+      if(masterKey){                                  // same vault? our in-memory DEK should still decrypt it
+        let same=true;
+        for(const k of dataKeys()){ if(isEnvelope(raw[k])){ try{ await aesDecrypt(masterKey, JSON.parse(raw[k])); }catch(e){ same=false; } break; } }
+        if(same){ await decryptAll(); return true; }
+      }
+      masterKey=null; dekRaw=null; for(const k in cache) delete cache[k];
+      return false;                                   // caller must prompt unlock
+    },
     async wipe(){ for(const k of Object.keys(raw)) removeRaw(k); for(const k in cache) delete cache[k]; masterKey=null; dekRaw=null; }
   };
 })();
@@ -2573,7 +2601,104 @@ function bootData(){
   buildAccountOptions(); syncTimerInputs(); paintEmotion();
   scene3d = !reduceMo && Store.get("nasdaq_3d")!=="off";
   renderAll(); renderBackupReminder();
+  if(Store.get("nasdaq_cloudcfg")) Cloud.init();      // resume cloud sync if configured
 }
+
+/* ---------- cloud sync (Firebase · Google auth · E2E encrypted blob) ---------- */
+const DEVICE_ID = Math.random().toString(36).slice(2);
+const Cloud = (() => {
+  const CFG_KEY="nasdaq_cloudcfg";
+  let fb=null, app=null, auth=null, dbF=null, user=null, unsub=null, pushT=null, lastRev=0, active=false, applying=false;
+  function cfg(){ try{ return JSON.parse(Store.get(CFG_KEY)||"null"); }catch(e){ return null; } }
+  function parseConfig(text){
+    const m=String(text||"").match(/\{[\s\S]*\}/); if(!m) throw 0;
+    const o=(new Function("return ("+m[0]+")"))();
+    if(!o || !o.apiKey || !o.projectId) throw 0;
+    return {apiKey:o.apiKey, authDomain:o.authDomain, projectId:o.projectId, storageBucket:o.storageBucket, messagingSenderId:o.messagingSenderId, appId:o.appId};
+  }
+  async function loadSDK(){
+    if(fb) return;
+    const base="https://www.gstatic.com/firebasejs/10.12.5/";
+    const [a,au,fs]=await Promise.all([import(base+"firebase-app.js"), import(base+"firebase-auth.js"), import(base+"firebase-firestore.js")]);
+    fb={...a,...au,...fs};
+  }
+  async function init(){
+    if(active) return true;
+    const c=cfg(); if(!c) return false;
+    try{
+      await loadSDK();
+      app=fb.initializeApp(c); auth=fb.getAuth(app); dbF=fb.getFirestore(app); active=true;
+      fb.onAuthStateChanged(auth, u=>{ user=u; renderCloud(); if(u) startSync(); else stopSync(); });
+      return true;
+    }catch(e){ active=false; renderCloud(); return false; }
+  }
+  async function connect(text){
+    let c; try{ c=parseConfig(text); }catch(e){ toast("ה‑config לא תקין"); return; }
+    Store.set(CFG_KEY, JSON.stringify(c));
+    if(await init()){ signIn(); } else { toast("טעינת Firebase נכשלה"); }
+  }
+  function disconnect(){ stopSync(); try{ if(auth) fb.signOut(auth); }catch(e){} Store.set(CFG_KEY,""); active=false; user=null; fb=null; app=null; auth=null; dbF=null; renderCloud(); }
+  async function signIn(){ try{ await fb.signInWithPopup(auth, new fb.GoogleAuthProvider()); }catch(e){ toast("ההתחברות נכשלה (בדוק Authorized domains)"); } }
+  async function signOut(){ try{ await fb.signOut(auth); }catch(e){} }
+  function ref(){ return fb.doc(dbF,"vaults",user.uid); }
+  function startSync(){
+    if(!user) return; renderCloud();
+    fb.getDoc(ref()).then(async snap=>{
+      if(snap.exists()) await incoming(snap.data()); else push();
+      if(unsub) unsub();
+      unsub=fb.onSnapshot(ref(), s=>{ if(s.exists()) incoming(s.data()); });
+    }).catch(()=>{});
+  }
+  function stopSync(){ if(unsub){ unsub(); unsub=null; } }
+  async function incoming(data){
+    if(!data || !data.entries || data.device===DEVICE_ID) { if(data&&data.rev) lastRev=Math.max(lastRev,data.rev); return; }
+    if(data.rev && data.rev<=lastRev) return;
+    lastRev=data.rev||Date.now();
+    applying=true;
+    const ok=await Store.adoptRaw(data.entries);
+    applying=false;
+    if(ok){ bootData(); toast("סונכרן מהענן ☁️"); }
+    else { lockApp(); toast("עודכן ממכשיר אחר — הזן קוד"); }
+  }
+  function schedulePush(){ if(!active||!user||applying||!Store.isUnlocked()) return; clearTimeout(pushT); pushT=setTimeout(push,1500); }
+  async function push(){
+    if(!active||!user) return;
+    try{ lastRev=Date.now(); await fb.setDoc(ref(), {entries:Store.exportRaw(), rev:lastRev, device:DEVICE_ID, at:new Date().toISOString()}); renderCloud(); }
+    catch(e){ /* offline / rules */ }
+  }
+  return { init, connect, disconnect, signIn, signOut, schedulePush,
+    state(){ return {active, signedIn:!!user, email:user?(user.email||""):"", hasCfg:!!cfg()}; } };
+})();
+Store.onWrite = () => Cloud.schedulePush();
+function renderCloud(){
+  const body=$("#cloudBody"); if(!body) return;
+  const s=Cloud.state();
+  if(!s.hasCfg){
+    body.innerHTML=`
+      <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px">הדבק כאן את ה‑<b>config</b> של פרויקט ה‑Firebase שלך (Project Settings ← Web app). רק העסקה <b>המוצפנת</b> תסונכרן — גוגל לא יכולה לקרוא אותה.</p>
+      <textarea id="cloudCfg" placeholder="apiKey: '…', projectId: '…', …" style="width:100%;min-height:120px;background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:11px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:12px;outline:none;direction:ltr"></textarea>
+      <button class="btn btn-primary" id="cloudConnect" style="width:100%;justify-content:center;margin-top:12px">חבר ל‑Firebase</button>`;
+    $("#cloudConnect").onclick=()=>Cloud.connect($("#cloudCfg").value);
+  } else if(!s.signedIn){
+    body.innerHTML=`
+      <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px">מחובר לפרויקט. התחבר עם Google כדי לסנכרן את היומן בין המכשירים שלך.</p>
+      <button class="btn btn-primary" id="cloudSignin" style="width:100%;justify-content:center">התחבר עם Google</button>
+      <button class="lock-link" id="cloudDisc" style="display:block;margin:14px auto 0">נתק את הענן</button>`;
+    $("#cloudSignin").onclick=()=>Cloud.signIn();
+    $("#cloudDisc").onclick=()=>{ if(confirm("לנתק את הענן מהמכשיר הזה? הדאטה המקומית נשארת.")) Cloud.disconnect(); };
+  } else {
+    body.innerHTML=`
+      <div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--green-dim);border-radius:11px;padding:12px 14px;margin-bottom:12px">
+        <span style="font-size:18px">☁️</span>
+        <div style="flex:1"><div style="font-weight:700;font-size:14px">מסונכרן</div><div class="dim" style="font-size:12px;direction:ltr">${escapeHtml(s.email)}</div></div>
+      </div>
+      <p style="font-size:12.5px;color:var(--faint);line-height:1.6">היומן מגובה ומסונכרן אוטומטית בכל שינוי. במכשיר חדש: התחבר עם אותו חשבון Google, ואז הזן את הקוד או מפתח השחזור.</p>
+      <button class="lock-link" id="cloudSignout" style="display:block;margin:14px auto 0">התנתק מ‑Google</button>`;
+    $("#cloudSignout").onclick=()=>Cloud.signOut();
+  }
+}
+function openCloud(){ renderCloud(); $("#cloudOverlay").classList.add("open"); document.body.style.overflow="hidden"; }
+function closeCloud(){ $("#cloudOverlay").classList.remove("open"); document.body.style.overflow=""; }
 
 /* ---------- PWA: service worker + install ---------- */
 let deferredPrompt=null;
@@ -2594,6 +2719,9 @@ $("#cryptoOverlay").onclick=e=>{ if(e.target.id==="cryptoOverlay") closeCrypto(n
 $("#cryptoPass").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); closeCrypto($("#cryptoPass").value); } });
 $("#lockBtn").onclick=lockSubmit;
 $("#btnLock").onclick=lockApp;
+$("#btnCloud").onclick=openCloud;
+$("#cloudClose").onclick=closeCloud;
+$("#cloudOverlay").onclick=e=>{ if(e.target.id==="cloudOverlay") closeCloud(); };
 $("#btnRecovery").onclick=showRecoveryKey;
 $("#lockPass").addEventListener("input",()=>{ if(lockMode==="setup"||lockMode==="setnew") $("#lockMeter").className="lock-meter s"+passStrength($("#lockPass").value); });
 $("#lockPass").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); if(lockMode==="setup"||lockMode==="setnew"){ $("#lockPass2").focus(); } else lockSubmit(); } });
@@ -2656,7 +2784,7 @@ $("#vStartIn").onchange=()=>{ vision.start=Math.max(100,parseFloat($("#vStartIn"
 $("#vRiskIn").onchange=()=>{ vision.risk=Math.max(0.1,Math.min(20,parseFloat($("#vRiskIn").value)||1)); saveVision(); renderVision(); };
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){ if($("#recoveryOverlay").classList.contains("open")) closeRecoveryModal(); else if($("#cryptoOverlay").classList.contains("open")) closeCrypto(null); else if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
+  if(e.key==="Escape"){ if($("#cloudOverlay").classList.contains("open")) closeCloud(); else if($("#recoveryOverlay").classList.contains("open")) closeRecoveryModal(); else if($("#cryptoOverlay").classList.contains("open")) closeCrypto(null); else if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
   if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && !$("#dayOverlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA" && document.activeElement.getAttribute("contenteditable")!=="true") openModal();
 });
 
