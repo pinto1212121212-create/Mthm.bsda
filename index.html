@@ -133,6 +133,8 @@ a{color:var(--blue);text-decoration:none}
 .lock-box .btn-primary{width:100%;justify-content:center;padding:12px}
 .lock-link{font-size:12px;color:var(--faint);background:none;border:none;margin-top:2px}
 .lock-link:hover{color:var(--muted)}
+.lock-remember{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);margin:2px 0 4px;cursor:pointer;text-align:right;line-height:1.4}
+.lock-remember input{width:17px;height:17px;accent-color:var(--green);flex:none;cursor:pointer}
 .rec-key{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate;font-size:19px;font-weight:700;letter-spacing:2px;text-align:center;color:var(--amber);background:var(--bg2);border:1px dashed var(--amber);border-radius:11px;padding:16px 12px;word-break:break-all;line-height:1.5}
 .rec-actions{display:flex;gap:10px;margin-top:14px}
 .rec-actions .btn{flex:1;justify-content:center}
@@ -1068,6 +1070,9 @@ tbody tr:last-child td{border-bottom:none}
     <input type="password" id="lockPass2" placeholder="אישור קוד" autocomplete="off" style="display:none">
     <div class="lock-meter" id="lockMeter" style="display:none"><i></i></div>
     <div class="lock-err" id="lockErr"></div>
+    <label class="lock-remember" id="lockRememberRow" style="display:none">
+      <input type="checkbox" id="lockRemember"> השאר פתוח במכשיר הזה (בלי קוד בכל כניסה)
+    </label>
     <button class="btn btn-primary" id="lockBtn">כניסה</button>
     <button class="lock-link" id="lockForgot" style="display:none">שכחתי את הקוד</button>
   </div>
@@ -1101,9 +1106,16 @@ const Store = (() => {
   let raw = {};            // raw persisted strings (ciphertext envelopes, legacy plaintext, or vault meta)
   let lsOk = true; try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); } catch(e){ lsOk=false; }
   let db=null, masterKey=null, dekRaw=null, writeChain=Promise.resolve();
-  const PREFIX="nasdaq_", META="__vault__";
+  const PREFIX="nasdaq_", META="__vault__", DEVK="__dev_key__", DEVDEK="__dev_dek__";
+  let remembered=false;                          // "stay open on this device" enabled?
+  async function deviceKey(create){              // non-extractable AES key kept in IndexedDB (not localStorage)
+    let k=await idbGet(DEVK);
+    if(!k && create){ try{ k=await crypto.subtle.generateKey({name:"AES-GCM",length:256}, false, ["encrypt","decrypt"]); idbPut(DEVK,k); }catch(e){ k=null; } }
+    return k||null;
+  }
   function openDB(){ return new Promise(res=>{ try{ const r=indexedDB.open("nasdaq_journal_db",1); r.onupgradeneeded=e=>{ e.target.result.createObjectStore("kv"); }; r.onsuccess=e=>res(e.target.result); r.onerror=()=>res(null);}catch(e){res(null);} }); }
   function idbAll(){ return new Promise(res=>{ if(!db) return res({}); try{ const out={}; const cur=db.transaction("kv","readonly").objectStore("kv").openCursor(); cur.onsuccess=e=>{const c=e.target.result; if(c){out[c.key]=c.value; c.continue();} else res(out);}; cur.onerror=()=>res(out);}catch(e){res({});} }); }
+  function idbGet(k){ return new Promise(res=>{ if(!db) return res(null); try{ const r=db.transaction("kv","readonly").objectStore("kv").get(k); r.onsuccess=()=>res(r.result); r.onerror=()=>res(null);}catch(e){res(null);} }); }
   function idbPut(k,v){ if(!db) return; try{ db.transaction("kv","readwrite").objectStore("kv").put(v,k);}catch(e){} }
   function idbDel(k){ if(!db) return; try{ db.transaction("kv","readwrite").objectStore("kv").delete(k);}catch(e){} }
   function persistRaw(k,str){ raw[k]=str; if(lsOk){try{localStorage.setItem(k,str);}catch(e){}} idbPut(k,str); }
@@ -1121,7 +1133,10 @@ const Store = (() => {
   }
   return {
     async ready(){
-      db=await openDB(); raw=await idbAll();
+      db=await openDB();
+      const all=await idbAll();
+      remembered = !!all[DEVDEK];                 // device-remember token present?
+      raw={}; for(const k in all){ if(k===META || k.indexOf(PREFIX)===0) raw[k]=all[k]; }   // ignore non-vault entries (device key, etc.)
       if(lsOk){ try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k===META || (k && k.indexOf(PREFIX)===0)) raw[k]=localStorage.getItem(k); } }catch(e){} }
       for(const k in raw){ idbPut(k,raw[k]); if(lsOk){try{localStorage.setItem(k,raw[k]);}catch(e){}} }
     },
@@ -1164,6 +1179,22 @@ const Store = (() => {
     },
     async setNewPasscode(pass){ if(!dekRaw) return false; await writePassMeta(pass); return true; },
     isUnlocked(){ return !!masterKey; },
+    isRemembered(){ return remembered; },
+    async enableRemember(){                         // wrap the DEK with the device key so the app auto-opens here
+      if(!dekRaw) return false;
+      const dk=await deviceKey(true); if(!dk) return false;
+      try{ idbPut(DEVDEK, JSON.stringify(await aesEncrypt(dk, b64(dekRaw)))); remembered=true; return true; }catch(e){ return false; }
+    },
+    forgetRemember(){ remembered=false; idbDel(DEVDEK); idbDel(DEVK); },
+    async tryRememberUnlock(){                       // auto-unlock on load without the passcode
+      if(!remembered) return false;
+      try{
+        const dk=await deviceKey(false); if(!dk) return false;
+        const env=await idbGet(DEVDEK); if(!env) return false;
+        dekRaw=ub64(await aesDecrypt(dk, JSON.parse(env)));
+        masterKey=await importDek(dekRaw); await decryptAll(); return true;
+      }catch(e){ return false; }
+    },
     lock(){ masterKey=null; dekRaw=null; for(const k in cache) delete cache[k]; },
     get(k){ return (k in cache) ? cache[k] : null; },
     set(k,v){ cache[k]=v; if(!masterKey) return; const val=v; writeChain=writeChain.then(()=>persistEnc(k,val)).catch(()=>{}); if(Store.onWrite) Store.onWrite(); },
@@ -1179,9 +1210,10 @@ const Store = (() => {
         if(same){ await decryptAll(); return true; }
       }
       masterKey=null; dekRaw=null; for(const k in cache) delete cache[k];
+      remembered=false; idbDel(DEVDEK); idbDel(DEVK);   // adopted a different vault → stale device token
       return false;                                   // caller must prompt unlock
     },
-    async wipe(){ for(const k of Object.keys(raw)) removeRaw(k); for(const k in cache) delete cache[k]; masterKey=null; dekRaw=null; }
+    async wipe(){ for(const k of Object.keys(raw)) removeRaw(k); for(const k in cache) delete cache[k]; masterKey=null; dekRaw=null; remembered=false; idbDel(DEVDEK); idbDel(DEVK); }
   };
 })();
 const KEY = "nasdaq_journal_v1";
@@ -2496,6 +2528,9 @@ function showLock(mode){
   $("#lockOverlay").classList.remove("hidden");
   $("#lockErr").textContent=""; $("#lockPass").value=""; $("#lockPass2").value=""; $("#lockMeter").className="lock-meter";
   const meter=$("#lockMeter"), p2=$("#lockPass2"), forgot=$("#lockForgot");
+  const rememberRow=$("#lockRememberRow");
+  rememberRow.style.display = (mode==="unlock"||mode==="setup") ? "flex" : "none";
+  $("#lockRemember").checked = (mode==="unlock"||mode==="setup");   // default on — convenience
   if(mode==="setup" || mode==="setnew"){
     $("#lockTitle").textContent = mode==="setnew" ? "קוד חדש" : "צור קוד כניסה";
     $("#lockSub").innerHTML = mode==="setnew" ? "שוחזר בהצלחה ✓ — בחר קוד כניסה חדש." : "הקוד יצפין את כל היומן במכשיר. נקבל מפתח שחזור בסוף.";
@@ -2535,7 +2570,7 @@ async function lockSubmit(){
       if(!passOk(p)){ $("#lockErr").textContent="קוד חלש מדי — לפחות 8 תווים, אותיות וספרות"; return; }
       if(p!==p2){ $("#lockErr").textContent="הקודים לא תואמים"; return; }
       $("#lockSub").textContent="מצפין… רגע 🔐";
-      if(lockMode==="setup"){ await Store.setupPasscode(p); }
+      if(lockMode==="setup"){ await Store.setupPasscode(p); if($("#lockRemember").checked) await Store.enableRemember(); }
       else { await Store.setNewPasscode(p); }                 // after recovery
       // ensure a recovery key exists; offer it
       const newKey=genRecoveryKey();
@@ -2556,6 +2591,7 @@ async function lockSubmit(){
     $("#lockSub").textContent="פותח…";
     const ok=await Store.unlock($("#lockPass").value);
     if(!ok){ $("#lockErr").textContent="קוד שגוי"; $("#lockSub").textContent="הזן את קוד הכניסה כדי לפתוח את היומן."; return; }
+    if($("#lockRemember").checked) await Store.enableRemember(); else Store.forgetRemember();
     finishUnlock();
   } catch(e){ $("#lockErr").textContent="שגיאה — נסה שוב"; }
   finally { btn.disabled=false; }
@@ -2590,12 +2626,13 @@ async function showRecoveryKey(){
 function lockApp(){
   if(!Store.isUnlocked()) return;
   clearTimeout(lockTimer);
+  Store.forgetRemember();               // explicit lock → require the code on next entry
   Store.lock();
   trades=[]; accounts=[]; rules=[];     // drop sensitive data from memory
   try { renderAll(); } catch(e){}       // and blank it out of the rendered DOM
   showLock("unlock");
 }
-function resetLockTimer(){ clearTimeout(lockTimer); if(Store.isUnlocked()) lockTimer=setTimeout(lockApp, LOCK_MS); }
+function resetLockTimer(){ clearTimeout(lockTimer); if(Store.isUnlocked() && !Store.isRemembered()) lockTimer=setTimeout(lockApp, LOCK_MS); }
 function bootData(){
   loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision();
   buildAccountOptions(); syncTimerInputs(); paintEmotion();
@@ -2799,7 +2836,8 @@ document.addEventListener("keydown",e=>{
   buildInstrumentOptions();
   buildMistakeChips();
   buildStars();
-  await unlockFlow();                   // gate: create passcode (first run / migrate) or unlock the vault
+  if(!(Store.hasVault() && Store.isRemembered() && await Store.tryRememberUnlock()))
+    await unlockFlow();                 // gate: create passcode (first run / migrate) or unlock the vault
   bootData();                          // decrypt + load + render
   init3d();
   tickTimer();
