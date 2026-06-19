@@ -2836,7 +2836,9 @@ document.addEventListener("keydown",e=>{
   buildInstrumentOptions();
   buildMistakeChips();
   buildStars();
-  if(!(Store.hasVault() && Store.isRemembered() && await Store.tryRememberUnlock()))
+  if(Store.hasVault() && Store.isRemembered() && await Store.tryRememberUnlock())
+    hideLock();                         // auto-unlocked on this device → skip the code screen
+  else
     await unlockFlow();                 // gate: create passcode (first run / migrate) or unlock the vault
   bootData();                          // decrypt + load + render
   init3d();
