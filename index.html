@@ -2611,8 +2611,13 @@ const Cloud = (() => {
   let fb=null, app=null, auth=null, dbF=null, user=null, unsub=null, pushT=null, lastRev=0, active=false, applying=false;
   function cfg(){ try{ return JSON.parse(Store.get(CFG_KEY)||"null"); }catch(e){ return null; } }
   function parseConfig(text){
-    const m=String(text||"").match(/\{[\s\S]*\}/); if(!m) throw 0;
-    const o=(new Function("return ("+m[0]+")"))();
+    text=String(text||"");
+    const k=text.indexOf("apiKey"); if(k<0) throw 0;
+    const start=text.lastIndexOf("{", k); if(start<0) throw 0;
+    let depth=0, end=-1;
+    for(let i=start;i<text.length;i++){ const ch=text[i]; if(ch==="{")depth++; else if(ch==="}"){ if(--depth===0){ end=i; break; } } }
+    if(end<0) throw 0;
+    const o=(new Function("return ("+text.slice(start,end+1)+")"))();
     if(!o || !o.apiKey || !o.projectId) throw 0;
     return {apiKey:o.apiKey, authDomain:o.authDomain, projectId:o.projectId, storageBucket:o.storageBucket, messagingSenderId:o.messagingSenderId, appId:o.appId};
   }
