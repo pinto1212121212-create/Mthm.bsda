@@ -148,6 +148,41 @@ a{color:var(--blue);text-decoration:none}
 #shotViewerBody{max-width:100%;display:flex;flex-direction:column;gap:14px;margin:auto 0}
 #shotViewerBody img{max-width:100%;max-height:90vh;object-fit:contain;border-radius:10px}
 .shot-close{position:fixed;top:14px;inset-inline-end:16px;z-index:401;background:rgba(255,255,255,.14);color:#fff;border:none;width:42px;height:42px;border-radius:50%;font-size:24px;line-height:1;cursor:pointer}
+/* discipline panel */
+.disc-panel{border:1px solid var(--red-dim,#7a2226)}
+.disc-toggle{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:12px}
+.disc-toggle input{width:19px;height:19px;accent-color:#ef4444;cursor:pointer}
+.disc-stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.disc-stat{flex:1;min-width:92px;background:var(--bg2);border:1px solid var(--line2);border-radius:11px;padding:11px 12px;text-align:center}
+.disc-stat .v{font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace}
+.disc-stat .l{font-size:11px;color:var(--faint);margin-top:2px}
+.disc-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.disc-grid label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted)}
+.disc-grid input.num{background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:9px 11px;border-radius:9px;outline:none}
+.disc-grid .disc-chk{flex-direction:row;align-items:center;gap:8px;grid-column:1/-1;cursor:pointer}
+.disc-grid .disc-chk input{width:18px;height:18px;accent-color:#ef4444;cursor:pointer;flex:none}
+.disc-shame{margin-top:16px;border-top:1px solid var(--line2);padding-top:8px}
+.shame-row{display:flex;gap:9px;align-items:flex-start;background:rgba(239,68,68,.07);border:1px solid var(--red-dim,#7a2226);border-radius:9px;padding:8px 11px;margin-top:7px;font-size:12.5px}
+.shame-row .sd{color:var(--faint);font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap}
+/* alarm overlay */
+#alarmOverlay{position:fixed;inset:0;z-index:500;background:rgba(80,0,0,.86);display:none;align-items:center;justify-content:center;padding:22px;backdrop-filter:blur(3px)}
+#alarmOverlay.open{display:flex;animation:alarmflash .5s steps(2,jump-none) infinite}
+@keyframes alarmflash{0%{background:rgba(120,0,0,.9)}100%{background:rgba(40,0,0,.86)}}
+.alarm-box{background:#1a0e10;border:2px solid #ef4444;border-radius:18px;padding:26px 22px;max-width:420px;width:100%;text-align:center;box-shadow:0 0 60px rgba(239,68,68,.5);animation:shake .45s cubic-bezier(.36,.07,.19,.97) 3}
+@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-8px)}40%,60%{transform:translateX(8px)}}
+.alarm-siren{font-size:54px;line-height:1;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.18)}}
+.alarm-box h2{color:#ff5a5f;font-size:24px;margin:10px 0 6px}
+.alarm-box #alarmMsg{color:#fff;font-size:15.5px;line-height:1.5;margin-bottom:12px}
+.alarm-extra{color:#ffb3b5;font-size:13px;background:rgba(239,68,68,.12);border-radius:10px;padding:9px 11px;margin-bottom:14px}
+.alarm-instr{color:var(--faint);font-size:12.5px;margin-bottom:8px}
+.alarm-box #alarmConfess{width:100%;background:#0e0809;border:1px solid #ef4444;color:#fff;padding:12px;border-radius:10px;text-align:center;font-size:15px;outline:none;margin-bottom:12px}
+.alarm-box #alarmClose{width:100%;justify-content:center;background:#ef4444;color:#fff;border:none}
+.alarm-box #alarmClose:disabled{opacity:.4;cursor:not-allowed}
+#discBar{margin-bottom:14px}
+.disc-banner{display:flex;align-items:center;gap:10px;border-radius:12px;padding:11px 14px;font-size:13px;font-weight:600}
+.disc-banner.lock{background:rgba(239,68,68,.12);border:1px solid #ef4444;color:#ff8a8d}
+.disc-banner.ok{background:rgba(52,211,153,.08);border:1px solid var(--green-dim);color:#7ee0b8}
 .rec-key{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate;font-size:19px;font-weight:700;letter-spacing:2px;text-align:center;color:var(--amber);background:var(--bg2);border:1px dashed var(--amber);border-radius:11px;padding:16px 12px;word-break:break-all;line-height:1.5}
 .rec-actions{display:flex;gap:10px;margin-top:14px}
 .rec-actions .btn{flex:1;justify-content:center}
@@ -624,6 +659,8 @@ tbody tr:last-child td{border-bottom:none}
   <div id="openBar"></div>
   <!-- tilt warning -->
   <div id="tiltBar"></div>
+  <!-- discipline status -->
+  <div id="discBar"></div>
   <!-- backup reminder -->
   <div id="backupBar"></div>
 
@@ -706,6 +743,26 @@ tbody tr:last-child td{border-bottom:none}
 
   <!-- ============ RULES ============ -->
   <div class="view" id="view-rules">
+    <div class="panel disc-panel">
+      <div class="panel-h">
+        <h3>🚨 מצב משמעת קשוח</h3>
+        <span class="hint">עונשים אמיתיים על הפרת כללים — כדי שתפחד לטעות</span>
+      </div>
+      <label class="disc-toggle"><input type="checkbox" id="discHard"> הפעל מצב משמעת קשוח</label>
+      <div class="disc-stats" id="discStats"></div>
+      <div class="disc-grid">
+        <label>תקרת הפסד יומית ($)<input type="number" class="num" id="discLoss" min="0" step="50" placeholder="0 = כבוי"></label>
+        <label>מקס׳ עסקאות ביום<input type="number" class="num" id="discMax" min="0" step="1" placeholder="0 = כבוי"></label>
+        <label>קנס להפרה ($)<input type="number" class="num" id="discFine" min="0" step="10"></label>
+        <label class="disc-chk"><input type="checkbox" id="discRevenge"> חסום עסקת נקמה (2+ הפסדים רצופים)</label>
+        <label class="disc-chk"><input type="checkbox" id="discChecklist"> חייב צ׳ק־ליסט מלא + פעולה לפי התוכנית</label>
+      </div>
+      <div class="disc-shame">
+        <div class="panel-h" style="margin-top:6px"><h3 style="font-size:14px">⛓️ קיר הבושה</h3><span class="hint">כל הפרה נשמרת לתמיד — אי אפשר למחוק</span></div>
+        <div id="discShame"></div>
+      </div>
+    </div>
+
     <div class="panel">
       <div class="panel-h">
         <h3>🧱 קיר המשמעת</h3>
@@ -1046,6 +1103,19 @@ tbody tr:last-child td{border-bottom:none}
       <button id="cloudClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     </div>
     <div class="modal-b" id="cloudBody"></div>
+  </div>
+</div>
+
+<!-- ============ DISCIPLINE ALARM ============ -->
+<div id="alarmOverlay">
+  <div class="alarm-box">
+    <div class="alarm-siren">🚨</div>
+    <h2>הפרת משמעת!</h2>
+    <p id="alarmMsg"></p>
+    <div class="alarm-extra" id="alarmExtra"></div>
+    <p class="alarm-instr">כדי לסגור — הקלד מילה במילה: <b>הפרתי את הכלל שלי</b></p>
+    <input id="alarmConfess" placeholder="הפרתי את הכלל שלי" autocomplete="off" autocapitalize="off">
+    <button class="btn" id="alarmClose" disabled>אני מודה ומקבל את העונש</button>
   </div>
 </div>
 
@@ -1732,6 +1802,126 @@ function syncTimerInputs(){
   const tg=$("#tmToggle"); if(tg){ tg.textContent=timer.running?"השהה":"התחל"; tg.classList.toggle("btn-primary",!timer.running); }
 }
 
+/* ---------- HARD DISCIPLINE MODE (alarms · lockouts · penalties) ---------- */
+const DISC_KEY="nasdaq_discipline_v1";
+let discipline={ hardMode:false, maxLossDay:0, maxTrades:0, revengeBlock:true, requireChecklist:true,
+  finePer:50, startDay:"", lastViolationDay:"", bestStreak:0, fines:0, lockUntilDay:"", violations:[] };
+let _alarmStop=null;
+function loadDiscipline(){
+  try{ const d=JSON.parse(Store.get(DISC_KEY)||"null"); if(d&&typeof d==="object") discipline={...discipline,...d}; }catch(e){}
+  if(!Array.isArray(discipline.violations)) discipline.violations=[];
+  if(!discipline.startDay) discipline.startDay=dayKey(new Date().toISOString());
+}
+function saveDiscipline(){ Store.set(DISC_KEY, JSON.stringify(discipline)); }
+function today(){ return dayKey(new Date().toISOString()); }
+function dDiff(a,b){ if(!a||!b) return 0; return Math.round((new Date(b+"T00:00:00")-new Date(a+"T00:00:00"))/86400000); }
+function streakDays(){ return Math.max(0, dDiff(discipline.lastViolationDay||discipline.startDay, today())); }
+function todayTrades(){ const d=today(); return trades.filter(t=>dayKey(t.date)===d); }
+function todayPnL(){ return todayTrades().filter(t=>!isOpen(t)).reduce((s,t)=>s+pnlOf(t),0); }
+function hadViolationToday(type){ const d=today(); return discipline.violations.some(v=>v.day===d && v.type===type); }
+
+function violate(type, msg, lock){
+  const cur=streakDays(); if(cur>discipline.bestStreak) discipline.bestStreak=cur;
+  discipline.violations.push({at:Date.now(), day:today(), type, msg});
+  if(discipline.violations.length>300) discipline.violations=discipline.violations.slice(-300);
+  discipline.lastViolationDay=today();                 // resets the streak to 0
+  discipline.fines += Math.max(0, discipline.finePer||0);
+  if(lock) discipline.lockUntilDay=today();
+  saveDiscipline();
+  fireAlarm(msg, !!lock);
+  try{ renderDiscipline(); renderDiscBar(); }catch(e){}
+}
+
+/* siren via Web Audio (no asset) */
+function playSiren(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return ()=>{};
+    const ctx=new Ctx(); const osc=ctx.createOscillator(), g=ctx.createGain();
+    osc.type="sawtooth"; osc.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime+0.05);
+    let t=ctx.currentTime; for(let i=0;i<120;i++){ osc.frequency.setValueAtTime(i%2?900:480, t); t+=0.32; }
+    osc.start();
+    return ()=>{ try{ g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.08); osc.stop(ctx.currentTime+0.2); setTimeout(()=>ctx.close(),350); }catch(e){} };
+  }catch(e){ return ()=>{}; }
+}
+const CONFESS_TEXT="הפרתי את הכלל שלי";
+function fireAlarm(msg, locked){
+  const ov=$("#alarmOverlay"); if(!ov) return;
+  $("#alarmMsg").textContent=msg;
+  $("#alarmExtra").innerHTML=`רצף המשמעת אופס ל‑<b>0</b> · קנס <b>${fmtMoney(discipline.finePer||0)}</b> (סה״כ ${fmtMoney(discipline.fines)})${locked?` · <b style="color:#fff">המסחר נעול עד מחר</b>`:""}`;
+  $("#alarmConfess").value=""; $("#alarmClose").disabled=true;
+  ov.classList.add("open"); document.body.style.overflow="hidden";
+  if(_alarmStop) _alarmStop();
+  const stopSiren=playSiren(); let vib=null;
+  try{ if(navigator.vibrate){ navigator.vibrate([400,150,400,150,800]); vib=setInterval(()=>{ try{navigator.vibrate([400,150,400,150,800]);}catch(e){} },2000); } }catch(e){}
+  _alarmStop=()=>{ try{stopSiren();}catch(e){} if(vib)clearInterval(vib); try{if(navigator.vibrate)navigator.vibrate(0);}catch(e){} _alarmStop=null; };
+}
+function checkConfess(){ $("#alarmClose").disabled = $("#alarmConfess").value.trim()!==CONFESS_TEXT; }
+function closeAlarm(){
+  if($("#alarmConfess").value.trim()!==CONFESS_TEXT) return;
+  if(_alarmStop) _alarmStop();
+  $("#alarmOverlay").classList.remove("open");
+  document.body.style.overflow= $("#overlay").classList.contains("open")?"hidden":"";
+}
+
+/* entry enforcement — called before opening a NEW trade */
+function enterBlock(){
+  if(!discipline.hardMode) return null;
+  if(discipline.lockUntilDay===today()) return {type:"lock", lock:false, msg:"🚫 המסחר נעול להיום אחרי חריגת משמעת. תחזור מחר עם ראש נקי."};
+  if(discipline.maxLossDay>0 && todayPnL()<=-Math.abs(discipline.maxLossDay)) return {type:"maxLoss", lock:true, msg:`🚫 הגעת לתקרת ההפסד היומית (${fmtMoney(discipline.maxLossDay)}). אסור להיכנס לעסקה חדשה.`};
+  if(discipline.maxTrades>0 && todayTrades().length>=discipline.maxTrades) return {type:"maxTrades", lock:true, msg:`🚫 הגעת למקסימום ${discipline.maxTrades} עסקאות היום. עצור — זה אוברטריידינג.`};
+  if(discipline.revengeBlock && tiltLosses()>=2) return {type:"revenge", lock:false, msg:"🚫 עסקת נקמה! 2+ הפסדים רצופים היום. הכלל שלך: לעצור. אל תיכנס."};
+  return null;
+}
+function guardEntry(){
+  const b=enterBlock(); if(!b) return true;
+  if(b.type!=="lock" && !hadViolationToday(b.type)) violate(b.type, b.msg, b.lock);
+  else fireAlarm(b.msg, b.type==="lock"||!!b.lock);
+  return false;
+}
+function checkPostSave(t){                              // checklist + loss-limit consequences after a trade is saved
+  if(!discipline.hardMode || isOpen(t)) return;
+  if(discipline.maxLossDay>0 && todayPnL()<=-Math.abs(discipline.maxLossDay) && !hadViolationToday("maxLoss"))
+    violate("maxLoss", `🚫 חצית את תקרת ההפסד היומית (${fmtMoney(discipline.maxLossDay)}). סיימת להיום.`, true);
+  if(discipline.requireChecklist){
+    const ruleMiss = rules.length>0 && (t.rulesOK||[]).length<rules.length;
+    if(ruleMiss || t.plan==="no") violate("checklist", "🚫 שמרת עסקה בלי לעמוד בצ׳ק־ליסט / לא לפי התוכנית.", false);
+  }
+}
+
+function renderDiscBar(){
+  const el=$("#discBar"); if(!el) return;
+  if(!discipline.hardMode){ el.innerHTML=""; return; }
+  if(discipline.lockUntilDay===today()){
+    el.innerHTML=`<div class="disc-banner lock">🔒 המסחר נעול עד מחר — חרגת ממשמעת היום. קנסות: ${fmtMoney(discipline.fines)}</div>`;
+  } else {
+    const s=streakDays();
+    el.innerHTML=`<div class="disc-banner ok">🛡️ ${s} ימים נקיים ברצף · שיא ${Math.max(discipline.bestStreak,s)} · אל תשבור את הרצף</div>`;
+  }
+}
+function renderDiscipline(){
+  if(!$("#discHard")) return;
+  $("#discHard").checked=discipline.hardMode;
+  $("#discLoss").value=discipline.maxLossDay||"";
+  $("#discMax").value=discipline.maxTrades||"";
+  $("#discFine").value=discipline.finePer||0;
+  $("#discRevenge").checked=discipline.revengeBlock;
+  $("#discChecklist").checked=discipline.requireChecklist;
+  const s=streakDays();
+  $("#discStats").innerHTML=`
+    <div class="disc-stat"><div class="v" style="color:#7ee0b8">${s}</div><div class="l">רצף נקי (ימים)</div></div>
+    <div class="disc-stat"><div class="v">${Math.max(discipline.bestStreak,s)}</div><div class="l">שיא רצף</div></div>
+    <div class="disc-stat"><div class="v" style="color:#ff8a8d">${discipline.violations.length}</div><div class="l">הפרות סה״כ</div></div>
+    <div class="disc-stat"><div class="v" style="color:#ff8a8d">${fmtMoney(discipline.fines)}</div><div class="l">קנסות מצטברים</div></div>`;
+  const sh=$("#discShame");
+  if(!discipline.violations.length){ sh.innerHTML=`<p class="dim" style="font-size:12.5px;margin-top:8px">עדיין נקי. שמור על זה. 🛡️</p>`; }
+  else sh.innerHTML=discipline.violations.slice().reverse().slice(0,60).map(v=>{
+    const d=new Date(v.at); const ds=pad2(d.getDate())+"/"+pad2(d.getMonth()+1)+" "+pad2(d.getHours())+":"+pad2(d.getMinutes());
+    return `<div class="shame-row"><span class="sd">${ds}</span><span>${escapeHtml(v.msg||v.type)}</span></div>`;
+  }).join("");
+}
+
 /* ---------- discipline wall ---------- */
 function dayDisciplined(dayTrades){
   return dayTrades.every(t=>{
@@ -2186,6 +2376,7 @@ function renderAll(){
   renderForecast();
   renderOpen();
   renderTilt();
+  renderDiscBar();
   renderBackupReminder();
   if($("#dayOverlay").classList.contains("open")) renderDay();
   populateFilterOptions();
@@ -2285,6 +2476,7 @@ function liveCalc(){
 }
 
 function openModal(id, prefillDate){
+  if(!id && !guardEntry()) return;          // hard discipline: block new entries when a limit is crossed
   editingId=id||null;
   draftMistakes=new Set(); draftRating=0; draftRules=new Set();
   $("#modalTitle").textContent= id?"עריכת עסקה":"עסקה חדשה";
@@ -2377,6 +2569,7 @@ function gcShots(){                                   // drop image keys no trad
 let qDir="long";
 function setQDir(d){ qDir=d; $("#qDirLong").classList.toggle("on-long",d==="long"); $("#qDirShort").classList.toggle("on-short",d==="short"); }
 function openQuick(){
+  if(!guardEntry()) return;                 // hard discipline gate
   setQDir("long");
   $("#qInstrument").value="NQ";
   $("#qAccount").value=$("#fAccount").value || (accounts[0]&&accounts[0].id) || "";
@@ -2459,7 +2652,8 @@ function saveTrade(){
   else trades.push(t);
   save(); gcShots(); closeModal(); renderAll();
   toast(editingId?(isOpen(t)?"העסקה עודכנה (פתוחה)":"העסקה עודכנה"):(isOpen(t)?"נכנסת לעסקה 🟢":"העסקה נשמרה ✓"));
-  if(!isOpen(t) && pnlOf(t)<0 && tiltLosses()>=2) setTimeout(()=>openBreathe("tilt"),350);
+  checkPostSave(t);                          // discipline consequences (checklist / loss limit)
+  if(!isOpen(t) && pnlOf(t)<0 && tiltLosses()>=2 && !$("#alarmOverlay").classList.contains("open")) setTimeout(()=>openBreathe("tilt"),350);
 }
 function delTrade(id){
   if(!confirm("למחוק את העסקה? אי אפשר לשחזר.")) return;
@@ -2725,10 +2919,10 @@ function lockApp(){
 }
 function resetLockTimer(){ clearTimeout(lockTimer); if(Store.isUnlocked() && !Store.isRemembered()) lockTimer=setTimeout(lockApp, LOCK_MS); }
 function bootData(){
-  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision();
+  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline();
   buildAccountOptions(); syncTimerInputs(); paintEmotion();
   scene3d = !reduceMo && Store.get("nasdaq_3d")!=="off";
-  renderAll(); renderBackupReminder();
+  renderAll(); renderDiscipline(); renderBackupReminder();
   if(Store.get("nasdaq_cloudcfg")) Cloud.init();      // resume cloud sync if configured
 }
 
@@ -2911,6 +3105,15 @@ $("#tmToggle").onclick=toggleRun;
 $("#tmReset").onclick=resetDay;
 $("#tmNotify").onclick=requestNotify;
 $("#timerFab").onclick=toggleRun;
+/* hard discipline mode wiring */
+$("#discHard").onchange=()=>{ discipline.hardMode=$("#discHard").checked; saveDiscipline(); renderDiscipline(); renderDiscBar(); toast(discipline.hardMode?"מצב משמעת קשוח פעיל 🚨":"מצב משמעת כבוי"); };
+$("#discLoss").onchange=()=>{ discipline.maxLossDay=Math.max(0,parseFloat($("#discLoss").value)||0); saveDiscipline(); renderDiscBar(); };
+$("#discMax").onchange=()=>{ discipline.maxTrades=Math.max(0,parseInt($("#discMax").value)||0); saveDiscipline(); renderDiscBar(); };
+$("#discFine").onchange=()=>{ discipline.finePer=Math.max(0,parseFloat($("#discFine").value)||0); saveDiscipline(); renderDiscipline(); };
+$("#discRevenge").onchange=()=>{ discipline.revengeBlock=$("#discRevenge").checked; saveDiscipline(); };
+$("#discChecklist").onchange=()=>{ discipline.requireChecklist=$("#discChecklist").checked; saveDiscipline(); };
+$("#alarmConfess").addEventListener("input",checkConfess);
+$("#alarmClose").onclick=closeAlarm;
 ["fAccount","fInstrument","fSession","fSetup","fRange","fOutcome"].forEach(id=>$("#"+id).onchange=renderAll);
 $("#fSearch").addEventListener("input", ()=>{ clearTimeout(window._searchT); window._searchT=setTimeout(renderAll,180); });
 $("#fcHorizon").onchange=renderForecast;
