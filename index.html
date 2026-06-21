@@ -193,6 +193,7 @@ a{color:var(--blue);text-decoration:none}
 }
 .filters select:focus,.filters input:focus{border-color:var(--blue)}
 .filters label{font-size:12px;color:var(--faint);margin-inline-end:-4px}
+.filters #fSearch{min-width:200px;flex:1 1 200px}
 .chip-clear{font-size:12px;color:var(--blue);padding:6px 4px}
 
 /* ===== KPI grid ===== */
@@ -595,6 +596,14 @@ tbody tr:last-child td{border-bottom:none}
       <option value="90">90 ימים</option>
       <option value="ytd">השנה</option>
     </select>
+    <label>תוצאה</label>
+    <select id="fOutcome">
+      <option value="">הכל</option>
+      <option value="win">מנצחות</option>
+      <option value="loss">מפסידות</option>
+      <option value="open">פתוחות</option>
+    </select>
+    <input type="search" id="fSearch" placeholder="🔍 חיפוש בסטאפ / הערות / תזה…" autocomplete="off">
     <button class="chip-clear" id="fClear">איפוס סינון</button>
   </div>
 
@@ -1331,6 +1340,7 @@ const dayKey = iso => { const d=new Date(iso); return d.getFullYear()+"-"+String
 /* ---------- filters ---------- */
 function getFiltered(){
   const fa=$("#fAccount").value, fi=$("#fInstrument").value, fse=$("#fSession").value, fst=$("#fSetup").value, fr=$("#fRange").value;
+  const fo=($("#fOutcome")||{}).value||"", fq=(($("#fSearch")||{}).value||"").trim().toLowerCase();
   let list = trades.slice();
   if(fa) list=list.filter(t=>t.account===fa);
   if(fi) list=list.filter(t=>t.instrument===fi);
@@ -1343,6 +1353,10 @@ function getFiltered(){
     else { from=new Date(); from.setDate(from.getDate()-parseInt(fr)); }
     list=list.filter(t=>new Date(t.date)>=from);
   }
+  if(fo==="open") list=list.filter(t=>isOpen(t));
+  else if(fo==="win") list=list.filter(t=>!isOpen(t)&&pnlOf(t)>0);
+  else if(fo==="loss") list=list.filter(t=>!isOpen(t)&&pnlOf(t)<0);
+  if(fq) list=list.filter(t=>[t.setup,t.notes,t.reason,t.instrument,t.session].some(v=>(v||"").toLowerCase().includes(fq)));
   return list.sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
 function getClosed(){ return getFiltered().filter(t=>!isOpen(t)); }
@@ -2819,12 +2833,13 @@ $("#tmToggle").onclick=toggleRun;
 $("#tmReset").onclick=resetDay;
 $("#tmNotify").onclick=requestNotify;
 $("#timerFab").onclick=toggleRun;
-["fAccount","fInstrument","fSession","fSetup","fRange"].forEach(id=>$("#"+id).onchange=renderAll);
+["fAccount","fInstrument","fSession","fSetup","fRange","fOutcome"].forEach(id=>$("#"+id).onchange=renderAll);
+$("#fSearch").addEventListener("input", ()=>{ clearTimeout(window._searchT); window._searchT=setTimeout(renderAll,180); });
 $("#fcHorizon").onchange=renderForecast;
 $("#vGoalIn").onchange=()=>{ vision.goal=Math.max(1000,parseFloat($("#vGoalIn").value)||100000000); saveVision(); renderVision(); };
 $("#vStartIn").onchange=()=>{ vision.start=Math.max(100,parseFloat($("#vStartIn").value)||10000); saveVision(); renderVision(); };
 $("#vRiskIn").onchange=()=>{ vision.risk=Math.max(0.1,Math.min(20,parseFloat($("#vRiskIn").value)||1)); saveVision(); renderVision(); };
-$("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
+$("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup","fOutcome","fSearch"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){ if($("#cloudOverlay").classList.contains("open")) closeCloud(); else if($("#recoveryOverlay").classList.contains("open")) closeRecoveryModal(); else if($("#cryptoOverlay").classList.contains("open")) closeCrypto(null); else if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
   if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && !$("#dayOverlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA" && document.activeElement.getAttribute("contenteditable")!=="true") openModal();
