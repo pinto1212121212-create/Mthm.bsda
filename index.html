@@ -135,6 +135,19 @@ a{color:var(--blue);text-decoration:none}
 .lock-link:hover{color:var(--muted)}
 .lock-remember{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);margin:2px 0 4px;cursor:pointer;text-align:right;line-height:1.4}
 .lock-remember input{width:17px;height:17px;accent-color:var(--green);flex:none;cursor:pointer}
+.shot-add{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border:1px dashed var(--line2);border-radius:9px;color:var(--muted);cursor:pointer;background:var(--panel);font-size:13px;width:fit-content}
+.shot-add:hover{border-color:var(--blue);color:var(--txt)}
+.shot-thumbs{display:flex;gap:9px;flex-wrap:wrap;margin-top:10px}
+.shot-thumbs:empty{margin-top:0}
+.shot-th{position:relative;width:76px;height:76px;border-radius:9px;overflow:hidden;border:1px solid var(--line2)}
+.shot-th img{width:100%;height:100%;object-fit:cover;cursor:pointer;display:block}
+.shot-rm{position:absolute;top:3px;inset-inline-end:3px;background:rgba(0,0,0,.62);color:#fff;border:none;width:21px;height:21px;border-radius:50%;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center}
+.shot-cam{background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px}
+#shotViewer{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.92);display:none;align-items:flex-start;justify-content:center;padding:20px;overflow:auto}
+#shotViewer.open{display:flex}
+#shotViewerBody{max-width:100%;display:flex;flex-direction:column;gap:14px;margin:auto 0}
+#shotViewerBody img{max-width:100%;max-height:90vh;object-fit:contain;border-radius:10px}
+.shot-close{position:fixed;top:14px;inset-inline-end:16px;z-index:401;background:rgba(255,255,255,.14);color:#fff;border:none;width:42px;height:42px;border-radius:50%;font-size:24px;line-height:1;cursor:pointer}
 .rec-key{font-family:'JetBrains Mono',monospace;direction:ltr;unicode-bidi:isolate;font-size:19px;font-weight:700;letter-spacing:2px;text-align:center;color:var(--amber);background:var(--bg2);border:1px dashed var(--amber);border-radius:11px;padding:16px 12px;word-break:break-all;line-height:1.5}
 .rec-actions{display:flex;gap:10px;margin-top:14px}
 .rec-actions .btn{flex:1;justify-content:center}
@@ -905,6 +918,14 @@ tbody tr:last-child td{border-bottom:none}
         </div>
 
         <div class="field full">
+          <label>צילומי מסך (גרף כניסה/יציאה)</label>
+          <label class="shot-add">📷 הוסף תמונה
+            <input type="file" id="shotInput" accept="image/*" multiple hidden>
+          </label>
+          <div class="shot-thumbs" id="shotThumbs"></div>
+        </div>
+
+        <div class="field full">
           <label>איכות העסקה</label>
           <div class="stars" id="starRating"></div>
         </div>
@@ -1026,6 +1047,12 @@ tbody tr:last-child td{border-bottom:none}
     </div>
     <div class="modal-b" id="cloudBody"></div>
   </div>
+</div>
+
+<!-- ============ SCREENSHOT VIEWER ============ -->
+<div id="shotViewer" onclick="if(event.target.id==='shotViewer')closeShotViewer()">
+  <button class="shot-close" onclick="closeShotViewer()" title="סגור">×</button>
+  <div id="shotViewerBody"></div>
 </div>
 
 <!-- ============ PASSPHRASE MODAL ============ -->
@@ -1206,6 +1233,8 @@ const Store = (() => {
     },
     lock(){ masterKey=null; dekRaw=null; for(const k in cache) delete cache[k]; },
     get(k){ return (k in cache) ? cache[k] : null; },
+    keys(){ return Object.keys(cache); },
+    remove(k){ delete cache[k]; removeRaw(k); if(Store.onWrite) Store.onWrite(); },
     set(k,v){ cache[k]=v; if(!masterKey) return; const val=v; writeChain=writeChain.then(()=>persistEnc(k,val)).catch(()=>{}); if(Store.onWrite) Store.onWrite(); },
     onWrite:null,
     exportRaw(){ const o={}; for(const k in raw){ if(k===META || k.indexOf(PREFIX)===0) o[k]=raw[k]; } return o; },
@@ -1821,7 +1850,7 @@ function renderTrades(){
       <td><span class="num dim">${t.entry}</span> → <span class="num dim">${op?'—':t.exit}</span></td>
       <td>${op?'<span class="tag-open">פתוחה</span>':`<span class="num ${clsPN(p)}" style="font-weight:700">${sign(p)+fmtMoney2(p)}</span>`}</td>
       <td><span class="num ${!op&&r!=null?clsPN(r):'dim'}">${!op&&r!=null?(sign(r)+r.toFixed(2)+"R"):"—"}</span></td>
-      <td>${t.setup?`<span class="tag">${escapeHtml(t.setup)}</span>`:'<span class="dim">—</span>'}</td>
+      <td>${t.setup?`<span class="tag">${escapeHtml(t.setup)}</span>`:'<span class="dim">—</span>'}${(t.shots&&t.shots.length)?` <button class="shot-cam" onclick="openShotGallery('${t.id}')" title="צילומי מסך">📷${t.shots.length>1?t.shots.length:''}</button>`:''}</td>
       <td><span class="dim" style="font-size:12px">${t.session||"—"}</span></td>
       <td><span style="color:var(--amber);font-size:12px">${stars||""}</span></td>
       <td><div class="row-act">
@@ -2279,6 +2308,7 @@ function openModal(id, prefillDate){
     (t.mistakes||[]).forEach(m=>{ draftMistakes.add(m); const c=document.querySelector(`#mistakeChips .chip[data-m="${m}"]`); if(c)c.classList.add("on"); });
     draftRating=t.rating||0;
     draftRules=new Set(t.rulesOK||[]);
+    draftShots=(t.shots||[]).map(id=>({id, data:Store.get(SHOT_PREFIX+id)})).filter(s=>s.data);
   } else {
     $("#fldDate").value=toLocalInput(prefillDate?dayAtNow(prefillDate):new Date().toISOString());
     $("#fldInstrument").value="NQ"; $("#fldContracts").value=1;
@@ -2288,8 +2318,9 @@ function openModal(id, prefillDate){
     $("#fldAccount").value=$("#fAccount").value || (accounts[0]&&accounts[0].id) || "";
     $("#fldReason").value="";
     setDir("long");
+    draftShots=[];
   }
-  paintStars(); buildRuleChecklist(); paintEmotion(); liveCalc(); updateGuard();
+  paintStars(); buildRuleChecklist(); paintEmotion(); liveCalc(); updateGuard(); renderShotThumbs();
   $("#overlay").classList.add("open");
   document.body.style.overflow="hidden";
 }
@@ -2299,6 +2330,48 @@ function paintEmotion(){
   Array.from(sel.options).forEach(o=>{ o.style.color = (o.value==="רגוע") ? "#34D399" : "#FB6E72"; });
 }
 function closeModal(){ $("#overlay").classList.remove("open"); document.body.style.overflow= $("#dayOverlay").classList.contains("open")?"hidden":""; }
+
+/* ---------- trade screenshots (downscaled, stored encrypted per key) ---------- */
+const SHOT_PREFIX="nasdaq_shot_";
+let draftShots=[];                                   // [{id,data}] for the open modal
+function fileToShot(file){                           // resize to keep the encrypted blob small
+  return new Promise((res,rej)=>{
+    const img=new Image(), url=URL.createObjectURL(file);
+    img.onload=()=>{ URL.revokeObjectURL(url);
+      const max=1400; let w=img.width, h=img.height;
+      if(w>max||h>max){ const s=Math.min(max/w,max/h); w=Math.round(w*s); h=Math.round(h*s); }
+      const c=document.createElement("canvas"); c.width=w; c.height=h;
+      c.getContext("2d").drawImage(img,0,0,w,h);
+      try{ res(c.toDataURL("image/jpeg",0.82)); }catch(e){ rej(e); } };
+    img.onerror=()=>{ URL.revokeObjectURL(url); rej(); };
+    img.src=url;
+  });
+}
+async function addShotFiles(files){
+  for(const f of files){
+    if(!f.type || f.type.indexOf("image/")!==0) continue;
+    if(draftShots.length>=10){ toast("עד 10 תמונות לעסקה"); break; }
+    try{ draftShots.push({id:uid(), data:await fileToShot(f)}); }catch(e){ toast("התמונה לא נטענה"); }
+  }
+  renderShotThumbs();
+}
+function removeDraftShot(id){ draftShots=draftShots.filter(s=>s.id!==id); renderShotThumbs(); }
+function renderShotThumbs(){
+  const el=$("#shotThumbs"); if(!el) return;
+  el.innerHTML=draftShots.map(s=>`<div class="shot-th"><img src="${s.data}" onclick="showShots(['${s.id}'],true)"><button type="button" class="shot-rm" onclick="removeDraftShot('${s.id}')">×</button></div>`).join("");
+}
+function showShots(ids, fromDraft){
+  const urls=ids.map(id=>{ if(fromDraft){ const d=draftShots.find(s=>s.id===id); return d&&d.data; } return Store.get(SHOT_PREFIX+id); }).filter(Boolean);
+  if(!urls.length) return;
+  $("#shotViewerBody").innerHTML=urls.map(u=>`<img src="${u}">`).join("");
+  $("#shotViewer").classList.add("open"); document.body.style.overflow="hidden";
+}
+function openShotGallery(tid){ const t=trades.find(x=>x.id===tid); if(t) showShots(t.shots||[], false); }
+function closeShotViewer(){ $("#shotViewer").classList.remove("open"); $("#shotViewerBody").innerHTML=""; document.body.style.overflow= $("#overlay").classList.contains("open")?"hidden":""; }
+function gcShots(){                                   // drop image keys no trade references anymore
+  const used=new Set(); trades.forEach(t=>(t.shots||[]).forEach(id=>used.add(id)));
+  Store.keys().filter(k=>k.indexOf(SHOT_PREFIX)===0).forEach(k=>{ if(!used.has(k.slice(SHOT_PREFIX.length))) Store.remove(k); });
+}
 
 /* ---------- quick entry (open positions) ---------- */
 let qDir="long";
@@ -2378,17 +2451,19 @@ function saveTrade(){
     rulesOK: [...draftRules],
     rulesTotal: rules.length,
     notes: $("#fldNotes").value.trim(),
-    rating: draftRating
+    rating: draftRating,
+    shots: draftShots.map(s=>s.id)
   };
+  draftShots.forEach(s=>Store.set(SHOT_PREFIX+s.id, s.data));   // persist (encrypted); idempotent
   if(editingId){ const i=trades.findIndex(x=>x.id===editingId); trades[i]=t; }
   else trades.push(t);
-  save(); closeModal(); renderAll();
+  save(); gcShots(); closeModal(); renderAll();
   toast(editingId?(isOpen(t)?"העסקה עודכנה (פתוחה)":"העסקה עודכנה"):(isOpen(t)?"נכנסת לעסקה 🟢":"העסקה נשמרה ✓"));
   if(!isOpen(t) && pnlOf(t)<0 && tiltLosses()>=2) setTimeout(()=>openBreathe("tilt"),350);
 }
 function delTrade(id){
   if(!confirm("למחוק את העסקה? אי אפשר לשחזר.")) return;
-  trades=trades.filter(t=>t.id!==id); save(); renderAll(); toast("נמחק");
+  trades=trades.filter(t=>t.id!==id); save(); gcShots(); renderAll(); toast("נמחק");
 }
 
 /* ---------- backup encryption (reuses shared AES-256-GCM + PBKDF2 600k) ---------- */
@@ -2429,7 +2504,8 @@ function downloadFile(text, name, type){
 }
 function markBackedUp(){ Store.set("nasdaq_lastbackup", JSON.stringify({at:Date.now(), count:trades.length})); renderBackupReminder(); }
 async function exportJSON(){
-  const payload={app:"nasdaq-journal", v:2, exportedAt:new Date().toISOString(), accounts, rules, trades, timer, vision};
+  const shots={}; trades.forEach(t=>(t.shots||[]).forEach(id=>{ const d=Store.get(SHOT_PREFIX+id); if(d) shots[id]=d; }));
+  const payload={app:"nasdaq-journal", v:2, exportedAt:new Date().toISOString(), accounts, rules, trades, timer, vision, shots};
   const stamp=new Date().toISOString().slice(0,10);
   const pass=await askPass("הצפנת הגיבוי 🔐","בחר סיסמה חזקה (8+ תווים). תצטרך אותה כדי לשחזר — אין דרך לשחזר בלעדיה.");
   if(pass===null) return;                                   // cancelled
@@ -2448,7 +2524,8 @@ function applyImport(imp){
   if(Array.isArray(imp.rules) && imp.rules.length){ rules=imp.rules.filter(x=>x&&typeof x.text==="string"); saveRules(); }
   if(imp.timer && typeof imp.timer==="object"){ timer={...timer,...imp.timer}; saveTimer(); syncTimerInputs(); }
   if(imp.vision && typeof imp.vision==="object"){ vision={...vision,...imp.vision}; saveVision(); }
-  migrateAccounts(); save(); buildAccountOptions(); paintEmotion(); renderAll(); tickTimer(); toast("שוחזר ✓");
+  if(imp.shots && typeof imp.shots==="object"){ for(const id in imp.shots){ if(typeof imp.shots[id]==="string") Store.set(SHOT_PREFIX+id, imp.shots[id]); } }
+  migrateAccounts(); save(); gcShots(); buildAccountOptions(); paintEmotion(); renderAll(); tickTimer(); toast("שוחזר ✓");
 }
 function importJSON(file){
   const r=new FileReader();
@@ -2804,6 +2881,7 @@ $("#qEntry").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefau
 $("#modalClose").onclick=closeModal;
 $("#modalCancel").onclick=closeModal;
 $("#modalSave").onclick=saveTrade;
+$("#shotInput").onchange=e=>{ addShotFiles([...e.target.files]); e.target.value=""; };
 $("#overlay").onclick=e=>{ if(e.target.id==="overlay") closeModal(); };
 $("#dirLong").onclick=()=>setDir("long");
 $("#dirShort").onclick=()=>setDir("short");
@@ -2841,7 +2919,7 @@ $("#vStartIn").onchange=()=>{ vision.start=Math.max(100,parseFloat($("#vStartIn"
 $("#vRiskIn").onchange=()=>{ vision.risk=Math.max(0.1,Math.min(20,parseFloat($("#vRiskIn").value)||1)); saveVision(); renderVision(); };
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup","fOutcome","fSearch"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){ if($("#cloudOverlay").classList.contains("open")) closeCloud(); else if($("#recoveryOverlay").classList.contains("open")) closeRecoveryModal(); else if($("#cryptoOverlay").classList.contains("open")) closeCrypto(null); else if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
+  if(e.key==="Escape"){ if($("#shotViewer").classList.contains("open")) closeShotViewer(); else if($("#cloudOverlay").classList.contains("open")) closeCloud(); else if($("#recoveryOverlay").classList.contains("open")) closeRecoveryModal(); else if($("#cryptoOverlay").classList.contains("open")) closeCrypto(null); else if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
   if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && !$("#dayOverlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA" && document.activeElement.getAttribute("contenteditable")!=="true") openModal();
 });
 
