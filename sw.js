@@ -1,6 +1,6 @@
 /* Service worker — offline app shell for the trading journal PWA */
-const CACHE = "mthm-journal-v1";
-const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = "mthm-journal-v2";
+const CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png", "./icon-maskable.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
