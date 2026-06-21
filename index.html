@@ -148,6 +148,18 @@ a{color:var(--blue);text-decoration:none}
 #shotViewerBody{max-width:100%;display:flex;flex-direction:column;gap:14px;margin:auto 0}
 #shotViewerBody img{max-width:100%;max-height:90vh;object-fit:contain;border-radius:10px}
 .shot-close{position:fixed;top:14px;inset-inline-end:16px;z-index:401;background:rgba(255,255,255,.14);color:#fff;border:none;width:42px;height:42px;border-radius:50%;font-size:24px;line-height:1;cursor:pointer}
+/* CSV import */
+.trades-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
+.csv-intro{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px}
+.csv-map{margin-top:16px}
+.csv-map h4{font-size:13px;margin:0 0 9px;color:var(--txt)}
+.csv-mode{font-size:12.5px;color:var(--faint);background:var(--bg2);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;margin-bottom:12px;line-height:1.5}
+.csv-row{display:grid;grid-template-columns:120px 1fr;gap:10px;align-items:center;margin-bottom:8px}
+.csv-row label{font-size:12.5px;color:var(--muted)}
+.csv-row select{background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:8px 10px;border-radius:8px;outline:none;width:100%}
+.csv-preview{margin-top:14px;background:var(--bg2);border:1px solid var(--line2);border-radius:10px;padding:11px 13px;font-size:12.5px;line-height:1.7}
+.csv-preview b{color:#7ee0b8}
+.csv-preview .warn{color:var(--amber)}
 /* discipline panel */
 .disc-panel{border:1px solid var(--red-dim,#7a2226)}
 .disc-toggle{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:12px}
@@ -694,6 +706,12 @@ tbody tr:last-child td{border-bottom:none}
 
   <!-- ============ TRADES ============ -->
   <div class="view" id="view-trades">
+    <div class="trades-toolbar">
+      <button class="btn btn-ghost" id="btnCsv" title="ייבוא עסקאות מ‑CSV (Tradovate וכו׳)">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15l3 3 3-3"/></svg>
+        ייבוא CSV
+      </button>
+    </div>
     <div id="tradesContent"></div>
   </div>
 
@@ -1106,6 +1124,27 @@ tbody tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<!-- ============ CSV IMPORT MODAL ============ -->
+<div class="overlay" id="csvOverlay">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-h">
+      <h2>📄 ייבוא עסקאות מ‑CSV</h2>
+      <button id="csvClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-b" id="csvBody">
+      <p class="csv-intro">בחר קובץ CSV שייצאת מ‑Tradovate (או כל ברוקר). אזהה את העמודות אוטומטית, ואם צריך — תתקן ידנית. פילים בודדים יורכבו לעסקאות שלמות.</p>
+      <label class="shot-add" style="width:auto"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> בחר קובץ CSV
+        <input type="file" id="csvInput" accept=".csv,text/csv" hidden>
+      </label>
+      <div id="csvConfig"></div>
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-ghost" id="csvCancel">ביטול</button>
+      <button class="btn btn-primary" id="csvImport" disabled>ייבא עסקאות</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ DISCIPLINE ALARM ============ -->
 <div id="alarmOverlay">
   <div class="alarm-box">
@@ -1418,6 +1457,7 @@ const isOpen = t => t.exit==null || t.exit==="" || isNaN(t.exit);
 
 function pnlOf(t){
   if(isOpen(t)) return 0;
+  if(typeof t.pnlOverride==="number") return t.pnlOverride;   // imported trades carry broker-realized P&L
   const pt = (INSTRUMENTS[t.instrument]?.pt) ?? 1;
   const dirMul = t.direction==="long"?1:-1;
   const gross = (t.exit - t.entry) * pt * t.contracts * dirMul;
@@ -2737,6 +2777,151 @@ function importJSON(file){
   r.readAsText(file);
 }
 
+/* ---------- CSV import (Tradovate & generic brokers) ---------- */
+let csvData=null, csvMap={}, csvMode="fill", csvBuilt=null;
+function parseCSV(text){
+  text=String(text||"").replace(/^﻿/,"");
+  const rows=[]; let row=[], cur="", q=false;
+  for(let i=0;i<text.length;i++){ const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else if(c==='"') q=true;
+    else if(c===',') { row.push(cur); cur=""; }
+    else if(c==='\n'){ row.push(cur); rows.push(row); row=[]; cur=""; }
+    else if(c==='\r'){} else cur+=c;
+  }
+  if(cur.length||row.length){ row.push(cur); rows.push(row); }
+  return rows.filter(r=>r.some(x=>String(x).trim()!==""));
+}
+const csvNorm=s=>String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+function findCol(H, names){ const N=H.map(csvNorm);
+  for(const n of names){ const i=N.indexOf(csvNorm(n)); if(i>=0) return i; }
+  for(const n of names){ const nn=csvNorm(n); const i=N.findIndex(h=>h.includes(nn)); if(i>=0) return i; } return -1; }
+function num(v){ v=String(v==null?"":v).trim(); let neg=false; if(/^\(.*\)$/.test(v)){neg=true;v=v.slice(1,-1);} v=v.replace(/[$,\s]/g,""); const n=parseFloat(v); return isNaN(n)?NaN:(neg?-n:n); }
+const cell=(r,i)=> (i>=0 && i<r.length)? r[i] : "";
+const round2=n=>Math.round(n*100)/100;
+function sideSign(v){ v=String(v||"").toLowerCase().trim(); if(/(^|[^a-z])(b|buy|bot|long)/.test(v)) return 1; if(/(^|[^a-z])(s|sell|sld|short)/.test(v)) return -1; return 0; }
+function csvTime(v){ const t=Date.parse(String(v||"").trim()); return isNaN(t)?Date.now():t; }
+function rootSym(s){ s=String(s||"").toUpperCase().replace(/^[@/]/,"").trim();
+  const roots=Object.keys(INSTRUMENTS).sort((a,b)=>b.length-a.length);
+  for(const r of roots){ if(s===r) return r; if(s.startsWith(r)){ const rest=s.slice(r.length); if(/^[FGHJKMNQUVXZ]\d{1,2}$/.test(rest)) return r; } }
+  const g=s.replace(/[FGHJKMNQUVXZ]\d{1,2}$/,""); return g||s; }
+function csvAcct(){ const s=$("#csvAcct"); return (s&&s.value) || (accounts[0]&&accounts[0].id) || ""; }
+function impHash(t){ return [t.instrument,t.direction,t.contracts,t.entry,t.exit,t.date].join("|"); }
+function mkTrade(o){
+  const t={ id:uid(), date:new Date(o.time).toISOString(), instrument:o.sym, direction:o.dir,
+    contracts:Math.max(1,Math.round(o.qty)||1), entry:round2(o.entry), exit:o.exit==null?null:round2(o.exit),
+    stop:null, target:null, fees:round2(o.fees||0), account:csvAcct(), session:"", setup:"", reason:"",
+    emoBefore:"רגוע", plan:"yes", mistakes:[], rulesOK:[], rulesTotal:0, notes:"", rating:0, shots:[], imported:true };
+  if(typeof o.pnlOverride==="number" && !isNaN(o.pnlOverride)) t.pnlOverride=round2(o.pnlOverride);
+  t.imp=impHash(t); return t;
+}
+function detectCols(){ const H=csvData.headers; return {
+  symbol:findCol(H,["symbol","contract","product","instrument"]),
+  side:findCol(H,["b/s","bs","buysell","side","action","direction","ordaction","positionside"]),
+  qty:findCol(H,["filledqty","qty","quantity","fillsize","size","contracts","amount","filled"]),
+  price:findCol(H,["fillprice","avgprice","avgpx","price","executionprice","matchprice","avgfillprice"]),
+  entry:findCol(H,["entryprice","avgentryprice","buyprice","openprice","priceopen","entry"]),
+  exit:findCol(H,["exitprice","avgexitprice","sellprice","closeprice","priceclose","exit"]),
+  pnl:findCol(H,["realizedpnl","netpnl","pnl","p/l","pl","profit","grosspnl","realized","totalpnl"]),
+  fees:findCol(H,["commission","commissions","fee","fees","totalcommission"]),
+  time:findCol(H,["boughttimestamp","soldtimestamp","filltime","timestamp","datetime","date","time","tradedate","closetime"]) }; }
+function applyDetected(d){
+  if(csvMode==="trade") csvMap={symbol:d.symbol,side:d.side,qty:d.qty,entry:d.entry,exit:d.exit,pnl:d.pnl,fees:d.fees,time:d.time};
+  else csvMap={symbol:d.symbol,side:d.side,qty:d.qty,price:(d.price>=0?d.price:d.entry),fees:d.fees,time:d.time};
+}
+function autoDetect(){ const d=detectCols();
+  csvMode = ((d.entry>=0&&d.exit>=0) || (d.pnl>=0 && !(d.side>=0&&d.price>=0))) ? "trade" : "fill";
+  applyDetected(d); }
+function buildFromTrades(){ const c=csvMap, out=[];
+  for(const r of csvData.rows){
+    const sym=rootSym(cell(r,c.symbol)); const qty=Math.abs(num(cell(r,c.qty))||1);
+    const entry=num(cell(r,c.entry)), exit=num(cell(r,c.exit)), pnlRaw=num(cell(r,c.pnl)), fees=Math.abs(num(cell(r,c.fees))||0);
+    let dir=sideSign(cell(r,c.side));
+    if(dir===0 && !isNaN(entry)&&!isNaN(exit)&&!isNaN(pnlRaw)) dir=(Math.sign(pnlRaw)*Math.sign(exit-entry))||1;
+    if(dir===0) dir=1;
+    if(isNaN(entry)) continue;
+    let over=pnlRaw;
+    if(isNaN(over) && !isNaN(exit)){ const pt=(INSTRUMENTS[sym]?.pt)??1; over=(exit-entry)*pt*qty*dir-fees; }
+    out.push(mkTrade({sym, dir:dir>0?"long":"short", qty, entry, exit:isNaN(exit)?null:exit, fees, time:csvTime(cell(r,c.time)), pnlOverride:over}));
+  }
+  return out;
+}
+function buildFromFills(){ const c=csvMap;
+  let fills=csvData.rows.map(r=>({ sym:rootSym(cell(r,c.symbol)), side:sideSign(cell(r,c.side)),
+    qty:Math.abs(num(cell(r,c.qty))||0), price:num(cell(r,c.price)), fees:Math.abs(num(cell(r,c.fees))||0), time:csvTime(cell(r,c.time)) }))
+    .filter(f=>f.side!==0 && f.qty>0 && !isNaN(f.price));
+  const bySym={}; fills.forEach(f=>{ (bySym[f.sym]=bySym[f.sym]||[]).push(f); });
+  const out=[];
+  const finish=(ep,open)=>{ const entry=ep.eq?ep.en/ep.eq:null; const exit=(!open&&ep.xq)?ep.xn/ep.xq:null;
+    const pt=(INSTRUMENTS[ep.sym]?.pt)??1; let over;
+    if(exit!=null) over=(exit-entry)*pt*ep.eq*(ep.dir>0?1:-1)-ep.fees;
+    return mkTrade({sym:ep.sym, dir:ep.dir>0?"long":"short", qty:ep.eq||1, entry, exit, fees:ep.fees, time:ep.t0, pnlOverride:over}); };
+  for(const sym in bySym){ const list=bySym[sym].sort((a,b)=>a.time-b.time);
+    let pos=0, ep=null;
+    const start=f=>({sym, dir:f.side, eq:0,en:0,xq:0,xn:0,fees:0,t0:f.time});
+    for(const f of list){
+      if(pos===0){ ep=start(f); }
+      ep.fees+=f.fees;
+      if(Math.sign(f.side)===Math.sign(ep.dir)){ ep.eq+=f.qty; ep.en+=f.qty*f.price; pos+=f.side*f.qty; }
+      else { let cq=Math.min(f.qty, Math.abs(pos)); ep.xq+=cq; ep.xn+=cq*f.price; pos += (ep.dir>0?-cq:cq);
+        const rem=f.qty-cq;
+        if(pos===0){ out.push(finish(ep)); ep=null; if(rem>0){ ep=start({side:f.side,time:f.time}); ep.eq=rem; ep.en=rem*f.price; pos=f.side*rem; } }
+      }
+    }
+    if(ep && pos!==0) out.push(finish(ep,true));
+  }
+  return out;
+}
+function buildTrades(){ return csvMode==="fill"?buildFromFills():buildFromTrades(); }
+function existingImpHashes(){ const s=new Set(); trades.forEach(t=>{ if(t.imp) s.add(t.imp); }); return s; }
+function renderCsvConfig(){
+  const H=csvData.headers;
+  const opt=sel=>`<option value="-1">— ללא —</option>`+H.map((h,i)=>`<option value="${i}" ${i===sel?"selected":""}>${escapeHtml(h)||("עמודה "+(i+1))}</option>`).join("");
+  const fields = csvMode==="fill"
+    ? [["symbol","מכשיר"],["side","B/S (קנייה/מכירה)"],["qty","כמות"],["price","מחיר"],["fees","עמלות"],["time","תאריך/שעה"]]
+    : [["symbol","מכשיר"],["side","כיוון (B/S)"],["qty","כמות"],["entry","מחיר כניסה"],["exit","מחיר יציאה"],["pnl","רווח/הפסד"],["fees","עמלות"],["time","תאריך/שעה"]];
+  const acctOpts=accounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
+  let html=`<div class="csv-map"><div class="csv-mode">זוהו <b>${csvData.rows.length}</b> שורות · מצב:
+    <select id="csvModeSel"><option value="fill" ${csvMode==="fill"?"selected":""}>פילים בודדים → הרכבת עסקאות</option><option value="trade" ${csvMode==="trade"?"selected":""}>עסקאות שלמות (שורה = עסקה)</option></select></div>
+    <h4>מיפוי עמודות</h4>`;
+  fields.forEach(([f,lbl])=>{ html+=`<div class="csv-row"><label>${lbl}</label><select data-f="${f}">${opt(csvMap[f]==null?-1:csvMap[f])}</select></div>`; });
+  html+=`<div class="csv-row"><label>שייך לחשבון</label><select id="csvAcct">${acctOpts}</select></div><div class="csv-preview" id="csvPreview"></div></div>`;
+  $("#csvConfig").innerHTML=html;
+  $("#csvModeSel").onchange=e=>{ csvMode=e.target.value; applyDetected(detectCols()); renderCsvConfig(); };
+  $$("#csvConfig select[data-f]").forEach(s=>s.onchange=()=>{ csvMap[s.dataset.f]=parseInt(s.value); updateCsvPreview(); });
+  updateCsvPreview();
+}
+function updateCsvPreview(){
+  const el=$("#csvPreview"); if(!el) return; let built=[], err=false;
+  try{ built=buildTrades(); }catch(e){ err=true; }
+  csvBuilt=built;
+  const closed=built.filter(t=>!isOpen(t)).length, open=built.length-closed;
+  const dup=built.filter(t=>existingImpHashes().has(t.imp)).length;
+  const net=built.reduce((s,t)=>s+pnlOf(t),0);
+  const unknown=[...new Set(built.map(t=>t.instrument).filter(s=>!INSTRUMENTS[s]))];
+  el.innerHTML = err ? `<span class="warn">שגיאה בפענוח — בדוק את המיפוי</span>`
+    : `יורכבו <b>${built.length}</b> עסקאות (${closed} סגורות${open?`, ${open} פתוחות`:""}) · נטו משוער <b>${fmtMoney(net)}</b>`
+      + (dup?` · <span class="warn">${dup} כפילויות יידלגו</span>`:"")
+      + (unknown.length?`<br><span class="warn">מכשירים לא מוכרים: ${unknown.map(escapeHtml).join(", ")} — P&L יילקח מהקובץ אם קיים</span>`:"");
+  $("#csvImport").disabled = !built.length;
+}
+function openCsv(){ csvData=null; csvBuilt=null; $("#csvConfig").innerHTML=""; $("#csvImport").disabled=true; $("#csvOverlay").classList.add("open"); document.body.style.overflow="hidden"; }
+function closeCsv(){ $("#csvOverlay").classList.remove("open"); document.body.style.overflow=""; }
+function loadCsvFile(file){ const r=new FileReader();
+  r.onload=()=>{ try{ const rows=parseCSV(String(r.result));
+    if(rows.length<2){ toast("הקובץ ריק או לא תקין"); return; }
+    csvData={headers:rows[0], rows:rows.slice(1)}; autoDetect(); renderCsvConfig();
+  }catch(e){ toast("שגיאה בקריאת הקובץ"); } };
+  r.readAsText(file);
+}
+function doCsvImport(){
+  const built=csvBuilt||buildTrades(); const have=existingImpHashes();
+  const fresh=built.filter(t=>!have.has(t.imp));
+  if(!fresh.length){ toast("אין עסקאות חדשות לייבא"); return; }
+  trades=trades.concat(fresh); save(); renderAll(); closeCsv();
+  toast(`יובאו ${fresh.length} עסקאות ✓`);
+}
+
 /* ---------- backup reminder ---------- */
 function renderBackupReminder(){
   const el=$("#backupBar"); if(!el) return;
@@ -3085,6 +3270,11 @@ $("#fldEmoBefore").addEventListener("change",paintEmotion);
 $("#btnExport").onclick=exportJSON;
 $("#btnImport").onclick=()=>$("#importFile").click();
 $("#importFile").onchange=e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=""; };
+$("#btnCsv").onclick=openCsv;
+$("#csvClose").onclick=closeCsv;
+$("#csvCancel").onclick=closeCsv;
+$("#csvInput").onchange=e=>{ if(e.target.files[0]) loadCsvFile(e.target.files[0]); e.target.value=""; };
+$("#csvImport").onclick=doCsvImport;
 $("#calPrev").onclick=()=>{ calDate.setMonth(calDate.getMonth()-1); renderCalendar(); };
 $("#calNext").onclick=()=>{ calDate.setMonth(calDate.getMonth()+1); renderCalendar(); };
 $("#dayClose").onclick=closeDay;
@@ -3122,7 +3312,7 @@ $("#vStartIn").onchange=()=>{ vision.start=Math.max(100,parseFloat($("#vStartIn"
 $("#vRiskIn").onchange=()=>{ vision.risk=Math.max(0.1,Math.min(20,parseFloat($("#vRiskIn").value)||1)); saveVision(); renderVision(); };
 $("#fClear").onclick=()=>{ ["fInstrument","fSession","fSetup","fOutcome","fSearch"].forEach(id=>$("#"+id).value=""); $("#fRange").value="all"; renderAll(); };
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){ if($("#shotViewer").classList.contains("open")) closeShotViewer(); else if($("#cloudOverlay").classList.contains("open")) closeCloud(); else if($("#recoveryOverlay").classList.contains("open")) closeRecoveryModal(); else if($("#cryptoOverlay").classList.contains("open")) closeCrypto(null); else if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
+  if(e.key==="Escape"){ if($("#shotViewer").classList.contains("open")) closeShotViewer(); else if($("#csvOverlay").classList.contains("open")) closeCsv(); else if($("#cloudOverlay").classList.contains("open")) closeCloud(); else if($("#recoveryOverlay").classList.contains("open")) closeRecoveryModal(); else if($("#cryptoOverlay").classList.contains("open")) closeCrypto(null); else if($("#breatheOverlay").classList.contains("open")) closeBreathe(); else if($("#overlay").classList.contains("open")) closeModal(); else if($("#quickOverlay").classList.contains("open")) closeQuick(); else if($("#dayOverlay").classList.contains("open")) closeDay(); else if($("#acctOverlay").classList.contains("open")) closeAcct(); }
   if((e.key==="n"||e.key==="N") && !$("#overlay").classList.contains("open") && !$("#dayOverlay").classList.contains("open") && document.activeElement.tagName!=="INPUT" && document.activeElement.tagName!=="TEXTAREA" && document.activeElement.getAttribute("contenteditable")!=="true") openModal();
 });
 
