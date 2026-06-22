@@ -935,6 +935,10 @@ tbody tr:last-child td{border-bottom:none}
           <input type="number" class="num" id="fldFees" step="0.01" value="0">
         </div>
         <div class="field">
+          <label>רווח/הפסד ידני ($)</label>
+          <input type="number" class="num" id="fldPnl" step="0.01" placeholder="ריק = חישוב אוטומטי">
+        </div>
+        <div class="field">
           <label>סשן</label>
           <select id="fldSession">
             <option>פתיחה (Open)</option>
@@ -2509,9 +2513,11 @@ function liveCalc(){
   const stop=parseFloat($("#fldStop").value);
   const fees=parseFloat($("#fldFees").value)||0;
   const inst=$("#fldInstrument").value;
-  if(isNaN(entry)||isNaN(exit)){ $("#lcPnl").textContent="—";$("#lcPnl").className="v"; $("#lcR").textContent="—";$("#lcR").className="v"; }
+  const pnlOv=parseFloat($("#fldPnl").value); const hasOv=!isNaN(pnlOv);
+  if(isNaN(entry)||(isNaN(exit)&&!hasOv)){ $("#lcPnl").textContent="—";$("#lcPnl").className="v"; $("#lcR").textContent="—";$("#lcR").className="v"; }
   else {
-    const t={instrument:inst,entry,exit,contracts,stop:isNaN(stop)?null:stop,fees,direction:draftDir};
+    const t={instrument:inst,entry,exit:isNaN(exit)?entry:exit,contracts,stop:isNaN(stop)?null:stop,fees,direction:draftDir};
+    if(hasOv) t.pnlOverride=pnlOv;
     const p=pnlOf(t), r=rOf(t);
     $("#lcPnl").textContent=sign(p)+fmtMoney2(p); $("#lcPnl").className="v "+clsPN(p);
     $("#lcR").textContent= r!=null?(sign(r)+r.toFixed(2)+"R"):"—"; $("#lcR").className="v "+(r!=null?clsPN(r):"");
@@ -2534,6 +2540,7 @@ function openModal(id, prefillDate){
     $("#fldEntry").value=t.entry; $("#fldExit").value=t.exit;
     $("#fldStop").value=t.stop??""; $("#fldTarget").value=t.target??"";
     $("#fldFees").value=t.fees||0;
+    $("#fldPnl").value=(typeof t.pnlOverride==="number")?t.pnlOverride:"";
     $("#fldSession").value=t.session||"פתיחה (Open)";
     $("#fldSetup").value=t.setup||"";
     $("#fldEmoBefore").value=t.emoBefore||"רגוע";
@@ -2550,7 +2557,7 @@ function openModal(id, prefillDate){
     $("#fldDate").value=toLocalInput(prefillDate?dayAtNow(prefillDate):new Date().toISOString());
     $("#fldInstrument").value="NQ"; $("#fldContracts").value=1;
     $("#fldEntry").value=""; $("#fldExit").value=""; $("#fldStop").value=""; $("#fldTarget").value="";
-    $("#fldFees").value=0; $("#fldSession").value="פתיחה (Open)"; $("#fldSetup").value="";
+    $("#fldFees").value=0; $("#fldPnl").value=""; $("#fldSession").value="פתיחה (Open)"; $("#fldSetup").value="";
     $("#fldEmoBefore").value="רגוע"; $("#fldPlan").value="yes"; $("#fldNotes").value="";
     $("#fldAccount").value=$("#fAccount").value || (accounts[0]&&accounts[0].id) || "";
     $("#fldReason").value="";
@@ -2669,13 +2676,14 @@ function saveTrade(){
   const entry=parseFloat($("#fldEntry").value), exit=parseFloat($("#fldExit").value);
   if(isNaN(entry)){ toast("צריך לפחות מחיר כניסה"); return; }
   const stop=parseFloat($("#fldStop").value), target=parseFloat($("#fldTarget").value);
+  const pnlOv=parseFloat($("#fldPnl").value);
   const t={
     id: editingId||uid(),
     date: new Date($("#fldDate").value||Date.now()).toISOString(),
     instrument: $("#fldInstrument").value,
     direction: draftDir,
     contracts: parseInt($("#fldContracts").value)||1,
-    entry, exit: isNaN(exit)?null:exit,
+    entry, exit: isNaN(exit)?(isNaN(pnlOv)?null:entry):exit,
     stop: isNaN(stop)?null:stop,
     target: isNaN(target)?null:target,
     fees: parseFloat($("#fldFees").value)||0,
@@ -2692,6 +2700,7 @@ function saveTrade(){
     rating: draftRating,
     shots: draftShots.map(s=>s.id)
   };
+  if(!isNaN(pnlOv)) t.pnlOverride=pnlOv;                        // manual P&L overrides the price-based calc
   draftShots.forEach(s=>Store.set(SHOT_PREFIX+s.id, s.data));   // persist (encrypted); idempotent
   if(editingId){ const i=trades.findIndex(x=>x.id===editingId); trades[i]=t; }
   else trades.push(t);
@@ -3270,7 +3279,7 @@ $("#overlay").onclick=e=>{ if(e.target.id==="overlay") closeModal(); };
 $("#dirLong").onclick=()=>setDir("long");
 $("#dirShort").onclick=()=>setDir("short");
 $("#fldEmoBefore").addEventListener("change",paintEmotion);
-["fldEntry","fldExit","fldStop","fldContracts","fldFees","fldInstrument"].forEach(id=>{ $("#"+id).addEventListener("input",liveCalc); $("#"+id).addEventListener("change",liveCalc); });
+["fldEntry","fldExit","fldStop","fldContracts","fldFees","fldInstrument","fldPnl"].forEach(id=>{ $("#"+id).addEventListener("input",liveCalc); $("#"+id).addEventListener("change",liveCalc); });
 ["fldStop","fldEmoBefore","fldDate"].forEach(id=>{ $("#"+id).addEventListener("input",updateGuard); $("#"+id).addEventListener("change",updateGuard); });
 $("#btnExport").onclick=exportJSON;
 $("#btnImport").onclick=()=>$("#importFile").click();
