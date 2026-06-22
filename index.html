@@ -169,8 +169,8 @@ a{color:var(--blue);text-decoration:none}
 .disc-stat .v{font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace}
 .disc-stat .l{font-size:11px;color:var(--faint);margin-top:2px}
 .disc-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
-.disc-grid label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted)}
-.disc-grid input.num{background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:9px 11px;border-radius:9px;outline:none}
+.disc-grid label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted);min-width:0}
+.disc-grid input.num{background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:9px 11px;border-radius:9px;outline:none;width:100%;min-width:0}
 .disc-grid .disc-chk{flex-direction:row;align-items:center;gap:8px;grid-column:1/-1;cursor:pointer}
 .disc-grid .disc-chk input{width:18px;height:18px;accent-color:#ef4444;cursor:pointer;flex:none}
 .disc-shame{margin-top:16px;border-top:1px solid var(--line2);padding-top:8px}
@@ -563,6 +563,7 @@ tbody tr:last-child td{border-bottom:none}
   .coach-hd{padding:14px 14px}
   #dayTitle{min-width:108px;font-size:14.5px}
   .cal-nav button{width:30px;height:30px}
+  .disc-grid{grid-template-columns:1fr}
 }
 @media(max-width:380px){
   .kpis{grid-template-columns:1fr}
