@@ -3333,7 +3333,8 @@ document.addEventListener("keydown",e=>{
     await unlockFlow();                 // gate: create passcode (first run / migrate) or unlock the vault
   bootData();                          // decrypt + load + render
   init3d();
-  tickTimer();
+  tickTimer();                         // resets the day's budget if a new day started
+  if(hmToMin(timer.budget)>0 && !timer.running && (timer.usedSec||0)===0){ timerStartRun(); saveTimer(); syncTimerInputs(); tickTimer(); }   // auto-start on first open of the day
   setInterval(tickTimer,1000);
   resetLockTimer();                    // start inactivity auto-lock
   registerSW();
