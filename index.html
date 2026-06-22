@@ -772,7 +772,7 @@ tbody tr:last-child td{border-bottom:none}
       <div class="disc-grid">
         <label>תקרת הפסד יומית ($)<input type="number" class="num" id="discLoss" min="0" step="50" placeholder="0 = כבוי"></label>
         <label>מקס׳ עסקאות ביום<input type="number" class="num" id="discMax" min="0" step="1" placeholder="0 = כבוי"></label>
-        <label>קנס להפרה ($)<input type="number" class="num" id="discFine" min="0" step="10"></label>
+        <label>קנס להפרה (₪)<input type="number" class="num" id="discFine" min="0" step="5"></label>
         <label class="disc-chk"><input type="checkbox" id="discRevenge"> חסום עסקת נקמה (2+ הפסדים רצופים)</label>
         <label class="disc-chk"><input type="checkbox" id="discChecklist"> חייב צ׳ק־ליסט מלא + פעולה לפי התוכנית</label>
       </div>
@@ -1460,6 +1460,7 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 const fmtMoney = n => (n<0?"-":"") + "$" + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0});
 const fmtMoney2 = n => (n<0?"-":"") + "$" + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtNis = n => Math.round(Math.abs(n)).toLocaleString("en-US") + " ₪";   // discipline fines are tracked in shekels
 const sign = n => n>0?"+":"";
 const clsPN = n => n>0?"pos":(n<0?"neg":"dim");
 const isOpen = t => t.exit==null || t.exit==="" || isNaN(t.exit);
@@ -1898,7 +1899,7 @@ const CONFESS_TEXT="הפרתי את הכלל שלי";
 function fireAlarm(msg, locked){
   const ov=$("#alarmOverlay"); if(!ov) return;
   $("#alarmMsg").textContent=msg;
-  $("#alarmExtra").innerHTML=`רצף המשמעת אופס ל‑<b>0</b> · קנס <b>${fmtMoney(discipline.finePer||0)}</b> (סה״כ ${fmtMoney(discipline.fines)})${locked?` · <b style="color:#fff">המסחר נעול עד מחר</b>`:""}`;
+  $("#alarmExtra").innerHTML=`רצף המשמעת אופס ל‑<b>0</b> · קנס <b>${fmtNis(discipline.finePer||0)}</b> (סה״כ ${fmtNis(discipline.fines)})${locked?` · <b style="color:#fff">המסחר נעול עד מחר</b>`:""}`;
   $("#alarmConfess").value=""; $("#alarmClose").disabled=true;
   ov.classList.add("open"); document.body.style.overflow="hidden";
   if(_alarmStop) _alarmStop();
@@ -1943,7 +1944,7 @@ function renderDiscBar(){
   const el=$("#discBar"); if(!el) return;
   if(!discipline.hardMode){ el.innerHTML=""; return; }
   if(discipline.lockUntilDay===today()){
-    el.innerHTML=`<div class="disc-banner lock">🔒 המסחר נעול עד מחר — חרגת ממשמעת היום. קנסות: ${fmtMoney(discipline.fines)}</div>`;
+    el.innerHTML=`<div class="disc-banner lock">🔒 המסחר נעול עד מחר — חרגת ממשמעת היום. קנסות: ${fmtNis(discipline.fines)}</div>`;
   } else {
     const s=streakDays();
     el.innerHTML=`<div class="disc-banner ok">🛡️ ${s} ימים נקיים ברצף · שיא ${Math.max(discipline.bestStreak,s)} · אל תשבור את הרצף</div>`;
@@ -1962,7 +1963,7 @@ function renderDiscipline(){
     <div class="disc-stat"><div class="v" style="color:#7ee0b8">${s}</div><div class="l">רצף נקי (ימים)</div></div>
     <div class="disc-stat"><div class="v">${Math.max(discipline.bestStreak,s)}</div><div class="l">שיא רצף</div></div>
     <div class="disc-stat"><div class="v" style="color:#ff8a8d">${discipline.violations.length}</div><div class="l">הפרות סה״כ</div></div>
-    <div class="disc-stat"><div class="v" style="color:#ff8a8d">${fmtMoney(discipline.fines)}</div><div class="l">קנסות מצטברים</div></div>`;
+    <div class="disc-stat"><div class="v" style="color:#ff8a8d">${fmtNis(discipline.fines)}</div><div class="l">קנסות מצטברים</div></div>`;
   const sh=$("#discShame");
   if(!discipline.violations.length){ sh.innerHTML=`<p class="dim" style="font-size:12.5px;margin-top:8px">עדיין נקי. שמור על זה. 🛡️</p>`; }
   else sh.innerHTML=discipline.violations.slice().reverse().slice(0,60).map(v=>{
