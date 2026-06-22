@@ -1557,13 +1557,10 @@ function renderKPIs(s){
     {label:"רצף נוכחי", val:(s.curStreak>0?"+"+s.curStreak:s.curStreak), cls:clsPN(s.curStreak), meta:"מקס׳ "+s.maxWinStreak+"W · "+s.maxLossStreak+"L"}
   ];
   const fa=$("#fAccount").value;
-  if(fa){
-    const a=accounts.find(x=>x.id===fa);
-    if(a){
-      const bal=(a.start||0)+s.net;
-      k.push({label:"יתרת חשבון", val:(sign(bal)+fmtMoney(bal)), cls:clsPN(s.net), meta:"פתיחה "+fmtMoney(a.start||0)});
-    }
-  }
+  const startSum = fa ? ((accounts.find(x=>x.id===fa)||{}).start||0)
+                      : accounts.reduce((x,a)=>x+(a.start||0),0);
+  const bal=startSum+s.net;
+  k.push({label:"יתרת חשבון", val:(sign(bal)+fmtMoney(bal)), cls:clsPN(bal), meta:"פתיחה "+fmtMoney(startSum)});
   $("#kpis").innerHTML = k.map(x=>`
     <div class="kpi${x.hero?' hero':''}" data-z="${x.hero?34:20}">
       <span class="glare"></span>
@@ -2460,13 +2457,17 @@ function renderAccounts(){
     return `<div class="acct-item">
       <div class="ainfo">
         <div class="aname" contenteditable="true" spellcheck="false" data-id="${a.id}">${escapeHtml(a.name)}</div>
-        <div class="abal">יתרה: ${fmtMoney2(bal)} · נטו <span class="${clsPN(net)}">${sign(net)+fmtMoney(net)}</span> · ${mine.length} עסק׳</div>
+        <div class="abal">פתיחה $<span class="astart" contenteditable="true" spellcheck="false" data-id="${a.id}">${Math.round(a.start||0)}</span> · יתרה ${fmtMoney2(bal)} · נטו <span class="${clsPN(net)}">${sign(net)+fmtMoney(net)}</span> · ${mine.length} עסק׳</div>
       </div>
       <button class="adel" data-id="${a.id}" title="מחק חשבון"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
     </div>`;
   }).join("");
   $$("#acctList .aname").forEach(node=>{
     node.addEventListener("blur",()=>{ const a=accounts.find(x=>x.id===node.dataset.id); if(!a)return; const v=node.textContent.trim(); if(v){ a.name=v; saveAccounts(); buildAccountOptions(); renderAll(); } else node.textContent=a.name; });
+    node.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); node.blur(); } });
+  });
+  $$("#acctList .astart").forEach(node=>{
+    node.addEventListener("blur",()=>{ const a=accounts.find(x=>x.id===node.dataset.id); if(!a)return; const v=parseFloat(String(node.textContent).replace(/[^0-9.\-]/g,"")); a.start=isNaN(v)?0:v; saveAccounts(); buildAccountOptions(); renderAccounts(); renderAll(); });
     node.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); node.blur(); } });
   });
   $$("#acctList .adel").forEach(b=>b.onclick=()=>delAccount(b.dataset.id));
