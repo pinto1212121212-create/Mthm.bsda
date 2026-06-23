@@ -2890,6 +2890,19 @@ function buildFromFills(){ const c=csvMap;
 }
 function buildTrades(){ return csvMode==="fill"?buildFromFills():buildFromTrades(); }
 function existingImpHashes(){ const s=new Set(); trades.forEach(t=>{ if(t.imp) s.add(t.imp); }); return s; }
+function classifyImport(built){            // split CSV trades into: exact dups (skip), matches to manual entries (update), and brand-new
+  const have=existingImpHashes(), usedIds=new Set();
+  const news=[], updates=[]; let skipped=0;
+  for(const it of built){
+    if(have.has(it.imp)){ skipped++; continue; }                       // already imported
+    const mt=trades.find(t=> !usedIds.has(t.id) && !t.imp              // a hand-logged trade (no import hash)…
+      && t.instrument===it.instrument && t.direction===it.direction    // …same instrument + direction…
+      && dayKey(t.date)===dayKey(it.date));                            // …same trading day → it's the same real trade
+    if(mt){ usedIds.add(mt.id); updates.push({mt, it}); }
+    else news.push(it);
+  }
+  return {news, updates, skipped};
+}
 function renderCsvConfig(){
   const H=csvData.headers;
   const opt=sel=>`<option value="-1">— ללא —</option>`+H.map((h,i)=>`<option value="${i}" ${i===sel?"selected":""}>${escapeHtml(h)||("עמודה "+(i+1))}</option>`).join("");
@@ -2912,14 +2925,15 @@ function updateCsvPreview(){
   try{ built=buildTrades(); }catch(e){ err=true; }
   csvBuilt=built;
   const closed=built.filter(t=>!isOpen(t)).length, open=built.length-closed;
-  const dup=built.filter(t=>existingImpHashes().has(t.imp)).length;
+  const {news, updates, skipped}=classifyImport(built);
   const net=built.reduce((s,t)=>s+pnlOf(t),0);
   const unknown=[...new Set(built.map(t=>t.instrument).filter(s=>!INSTRUMENTS[s]))];
   el.innerHTML = err ? `<span class="warn">שגיאה בפענוח — בדוק את המיפוי</span>`
     : `יורכבו <b>${built.length}</b> עסקאות (${closed} סגורות${open?`, ${open} פתוחות`:""}) · נטו משוער <b>${fmtMoney(net)}</b>`
-      + (dup?` · <span class="warn">${dup} כפילויות יידלגו</span>`:"")
+      + (updates.length?` · <span style="color:#7ee0b8">${updates.length} יעדכנו תיעוד ידני (שומר הערות)</span>`:"")
+      + (skipped?` · <span class="warn">${skipped} כפילויות יידלגו</span>`:"")
       + (unknown.length?`<br><span class="warn">מכשירים לא מוכרים: ${unknown.map(escapeHtml).join(", ")} — P&L יילקח מהקובץ אם קיים</span>`:"");
-  $("#csvImport").disabled = !built.length;
+  $("#csvImport").disabled = !(news.length||updates.length);
 }
 function openCsv(){ csvData=null; csvBuilt=null; $("#csvConfig").innerHTML=""; $("#csvImport").disabled=true; $("#csvOverlay").classList.add("open"); document.body.style.overflow="hidden"; }
 function closeCsv(){ $("#csvOverlay").classList.remove("open"); document.body.style.overflow=""; }
@@ -2931,11 +2945,17 @@ function loadCsvFile(file){ const r=new FileReader();
   r.readAsText(file);
 }
 function doCsvImport(){
-  const built=csvBuilt||buildTrades(); const have=existingImpHashes();
-  const fresh=built.filter(t=>!have.has(t.imp));
-  if(!fresh.length){ toast("אין עסקאות חדשות לייבא"); return; }
-  trades=trades.concat(fresh); save(); renderAll(); closeCsv();
-  toast(`יובאו ${fresh.length} עסקאות ✓`);
+  const built=csvBuilt||buildTrades();
+  const {news, updates}=classifyImport(built);
+  if(!news.length && !updates.length){ toast("אין עסקאות חדשות לייבא"); return; }
+  updates.forEach(({mt,it})=>{                 // back-fill exact numbers from the broker, keep the hand-logged discipline data
+    mt.entry=it.entry; mt.exit=it.exit; mt.contracts=it.contracts; mt.fees=it.fees;
+    mt.date=it.date; mt.instrument=it.instrument; mt.imp=it.imp; mt.imported=true;
+    if(typeof it.pnlOverride==="number") mt.pnlOverride=it.pnlOverride; else delete mt.pnlOverride;
+  });
+  trades=trades.concat(news); save(); gcShots(); renderAll(); closeCsv();
+  const parts=[]; if(news.length)parts.push(`${news.length} חדשות`); if(updates.length)parts.push(`${updates.length} עודכנו`);
+  toast(`יובאו: ${parts.join(" · ")} ✓`);
 }
 
 /* ---------- backup reminder ---------- */
