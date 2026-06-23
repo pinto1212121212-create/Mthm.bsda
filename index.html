@@ -777,7 +777,7 @@ tbody tr:last-child td{border-bottom:none}
         <label class="disc-chk"><input type="checkbox" id="discChecklist"> חייב צ׳ק־ליסט מלא + פעולה לפי התוכנית</label>
       </div>
       <div class="disc-shame">
-        <div class="panel-h" style="margin-top:6px"><h3 style="font-size:14px">⛓️ קיר הבושה</h3><span class="hint">כל הפרה נשמרת לתמיד — אי אפשר למחוק</span></div>
+        <div class="panel-h" style="margin-top:6px"><h3 style="font-size:14px">⛓️ קיר הבושה</h3><button class="chip-clear" id="discReset" title="אפס קנסות והפרות">אפס קנסות</button></div>
         <div id="discShame"></div>
       </div>
     </div>
@@ -1203,7 +1203,7 @@ tbody tr:last-child td{border-bottom:none}
 
 <input type="file" id="importFile" accept="application/json" style="display:none">
 
-<button id="timerFab" class="timer-fab off" title="טיימר מסחר — הקש להפעלה/כיבוי">
+<button id="timerFab" class="timer-fab off" title="טיימר מסחר — הקש להפעלה/כיבוי" style="display:none">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/></svg>
   <span class="fab-txt">טיימר</span>
 </button>
@@ -3338,6 +3338,7 @@ $("#discMax").onchange=()=>{ discipline.maxTrades=Math.max(0,parseInt($("#discMa
 $("#discFine").onchange=()=>{ discipline.finePer=Math.max(0,parseFloat($("#discFine").value)||0); saveDiscipline(); renderDiscipline(); };
 $("#discRevenge").onchange=()=>{ discipline.revengeBlock=$("#discRevenge").checked; saveDiscipline(); };
 $("#discChecklist").onchange=()=>{ discipline.requireChecklist=$("#discChecklist").checked; saveDiscipline(); };
+$("#discReset").onclick=()=>{ if(confirm("לאפס את כל הקנסות וההפרות ולהתחיל רצף נקי מהיום? אי אפשר לשחזר.")){ discipline.fines=0; discipline.violations=[]; discipline.lastViolationDay=""; discipline.lockUntilDay=""; discipline.startDay=today(); saveDiscipline(); renderDiscipline(); renderDiscBar(); toast("הקנסות וההפרות אופסו ✓"); } };
 $("#alarmConfess").addEventListener("input",checkConfess);
 $("#alarmClose").onclick=closeAlarm;
 ["fAccount","fInstrument","fSession","fSetup","fRange","fOutcome"].forEach(id=>$("#"+id).onchange=renderAll);
@@ -3364,8 +3365,7 @@ document.addEventListener("keydown",e=>{
     await unlockFlow();                 // gate: create passcode (first run / migrate) or unlock the vault
   bootData();                          // decrypt + load + render
   init3d();
-  tickTimer();                         // resets the day's budget if a new day started
-  if(hmToMin(timer.budget)>0 && !timer.running && (timer.usedSec||0)===0){ timerStartRun(); saveTimer(); syncTimerInputs(); tickTimer(); }   // auto-start on first open of the day
+  tickTimer();
   setInterval(tickTimer,1000);
   resetLockTimer();                    // start inactivity auto-lock
   registerSW();
