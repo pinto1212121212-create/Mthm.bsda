@@ -960,7 +960,10 @@ tbody tr:last-child td{border-bottom:none}
         </div>
         <div class="field">
           <label>רווח/הפסד ידני ($)</label>
-          <input type="number" class="num" id="fldPnl" step="0.01" placeholder="ריק = חישוב אוטומטי">
+          <div style="display:flex;gap:8px;align-items:stretch">
+            <button type="button" id="fldPnlSign" class="btn" style="padding:0 16px;font-size:19px;font-weight:800;min-width:50px;justify-content:center;color:var(--green)">+</button>
+            <input type="number" class="num" id="fldPnl" step="0.01" min="0" inputmode="decimal" placeholder="ריק = חישוב אוטומטי" style="flex:1">
+          </div>
         </div>
         <div class="field">
           <label>סשן</label>
@@ -1431,7 +1434,7 @@ const MISTAKES = ["כניסה מוקדמת","רדיפת מחיר","ללא סטו
 /* ---------- state ---------- */
 let trades = [];
 let editingId = null;
-let draftDir = "long", draftMistakes = new Set(), draftRating = 0, draftRules = new Set();
+let draftDir = "long", draftMistakes = new Set(), draftRating = 0, draftRules = new Set(), draftPnlSign = 1;
 let calDate = new Date();
 let currentDayKey = null;
 
@@ -2586,6 +2589,7 @@ function buildStars(){
 }
 function paintStars(){ $$("#starRating button").forEach(b=>b.classList.toggle("on", parseInt(b.dataset.s)<=draftRating)); }
 function setDir(d){ draftDir=d; $("#dirLong").classList.toggle("on-long",d==="long"); $("#dirShort").classList.toggle("on-short",d==="short"); liveCalc(); }
+function paintPnlSign(){ const b=$("#fldPnlSign"); if(!b) return; b.textContent=draftPnlSign<0?"−":"+"; b.style.color=draftPnlSign<0?"var(--red)":"var(--green)"; }
 
 function liveCalc(){
   const entry=parseFloat($("#fldEntry").value), exit=parseFloat($("#fldExit").value);
@@ -2593,11 +2597,11 @@ function liveCalc(){
   const stop=parseFloat($("#fldStop").value);
   const fees=parseFloat($("#fldFees").value)||0;
   const inst=$("#fldInstrument").value;
-  const pnlOv=parseFloat($("#fldPnl").value); const hasOv=!isNaN(pnlOv);
+  const pnlOv=parseFloat($("#fldPnl").value); const hasOv=!isNaN(pnlOv); const signedOv=hasOv?Math.abs(pnlOv)*draftPnlSign:NaN;
   if(isNaN(entry)||(isNaN(exit)&&!hasOv)){ $("#lcPnl").textContent="—";$("#lcPnl").className="v"; $("#lcR").textContent="—";$("#lcR").className="v"; }
   else {
     const t={instrument:inst,entry,exit:isNaN(exit)?entry:exit,contracts,stop:isNaN(stop)?null:stop,fees,direction:draftDir};
-    if(hasOv) t.pnlOverride=pnlOv;
+    if(hasOv) t.pnlOverride=signedOv;
     const p=pnlOf(t), r=rOf(t);
     $("#lcPnl").textContent=sign(p)+fmtMoney2(p); $("#lcPnl").className="v "+clsPN(p);
     $("#lcR").textContent= r!=null?(sign(r)+r.toFixed(2)+"R"):"—"; $("#lcR").className="v "+(r!=null?clsPN(r):"");
@@ -2629,7 +2633,8 @@ function openModal(id, prefillDate){
     $("#fldEntry").value=t.entry; $("#fldExit").value=t.exit;
     $("#fldStop").value=t.stop??""; $("#fldTarget").value=t.target??"";
     $("#fldFees").value=t.fees||0;
-    $("#fldPnl").value=(typeof t.pnlOverride==="number")?t.pnlOverride:"";
+    draftPnlSign=(typeof t.pnlOverride==="number" && t.pnlOverride<0)?-1:1;
+    $("#fldPnl").value=(typeof t.pnlOverride==="number")?Math.abs(t.pnlOverride):"";
     $("#fldSession").value=t.session||"פתיחה (Open)";
     $("#fldSetup").value=t.setup||"";
     $("#fldEmoBefore").value=t.emoBefore||"רגוע";
@@ -2646,14 +2651,14 @@ function openModal(id, prefillDate){
     $("#fldDate").value=toLocalInput(prefillDate?dayAtNow(prefillDate):new Date().toISOString());
     $("#fldInstrument").value="NQ"; $("#fldContracts").value=1;
     $("#fldEntry").value=""; $("#fldExit").value=""; $("#fldStop").value=""; $("#fldTarget").value="";
-    $("#fldFees").value=0; $("#fldPnl").value=""; $("#fldSession").value="פתיחה (Open)"; $("#fldSetup").value="";
+    $("#fldFees").value=0; $("#fldPnl").value=""; draftPnlSign=1; $("#fldSession").value="פתיחה (Open)"; $("#fldSetup").value="";
     $("#fldEmoBefore").value="רגוע"; $("#fldPlan").value="yes"; $("#fldNotes").value="";
     $("#fldAccount").value=$("#fAccount").value || (accounts[0]&&accounts[0].id) || "";
     $("#fldReason").value="";
     setDir("long");
     draftShots=[];
   }
-  paintStars(); buildRuleChecklist(); paintEmotion(); liveCalc(); updateGuard(); renderShotThumbs();
+  paintStars(); buildRuleChecklist(); paintEmotion(); paintPnlSign(); liveCalc(); updateGuard(); renderShotThumbs();
   $("#overlay").classList.add("open");
   document.body.style.overflow="hidden";
 }
@@ -2789,7 +2794,7 @@ function saveTrade(){
     rating: draftRating,
     shots: draftShots.map(s=>s.id)
   };
-  if(!isNaN(pnlOv)) t.pnlOverride=pnlOv;                        // manual P&L overrides the price-based calc
+  if(!isNaN(pnlOv)) t.pnlOverride=Math.abs(pnlOv)*draftPnlSign;  // manual P&L overrides the price-based calc (sign from +/− toggle)
   draftShots.forEach(s=>Store.set(SHOT_PREFIX+s.id, s.data));   // persist (encrypted); idempotent
   if(editingId){ const i=trades.findIndex(x=>x.id===editingId); trades[i]=t; }
   else trades.push(t);
@@ -3395,6 +3400,7 @@ $("#dirShort").onclick=()=>setDir("short");
 $("#fldEmoBefore").addEventListener("change",paintEmotion);
 ["fldEntry","fldExit","fldStop","fldContracts","fldFees","fldInstrument","fldPnl"].forEach(id=>{ $("#"+id).addEventListener("input",liveCalc); $("#"+id).addEventListener("change",liveCalc); });
 ["fldStop","fldEmoBefore","fldDate","fldEntry","fldContracts","fldInstrument","fldAccount"].forEach(id=>{ $("#"+id).addEventListener("input",updateGuard); $("#"+id).addEventListener("change",updateGuard); });
+$("#fldPnlSign").onclick=()=>{ draftPnlSign*=-1; paintPnlSign(); liveCalc(); };
 $("#btnExport").onclick=exportJSON;
 $("#btnImport").onclick=()=>$("#importFile").click();
 $("#importFile").onchange=e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=""; };
