@@ -2725,7 +2725,7 @@ function openQuick(){
   document.body.style.overflow="hidden";
   setTimeout(()=>{ const e=$("#qEntry"); if(e) e.focus(); },60);
 }
-function closeQuick(){ $("#quickOverlay").classList.remove("open"); document.body.style.overflow=""; }
+function closeQuick(){ $("#quickOverlay").classList.remove("open"); document.body.style.overflow=""; if(/^#(quick|enter)$/.test(location.hash)) history.replaceState(null,"",location.pathname+location.search); }
 function saveQuick(){
   const entry=parseFloat($("#qEntry").value);
   if(isNaN(entry)){ toast("צריך מחיר כניסה"); return; }
@@ -3467,8 +3467,10 @@ document.addEventListener("keydown",e=>{
   setInterval(tickTimer,1000);
   resetLockTimer();                    // start inactivity auto-lock
   registerSW();
+  if(/^#(quick|enter)$/.test(location.hash)) setTimeout(openQuick,150);   // deep-link: open straight to quick entry
   if(Store.hasVault() && !Store.hasRecovery()) setTimeout(()=>toast("🔑 הגדר מפתח שחזור — האייקון בסרגל העליון"), 1600);
 })();
+window.addEventListener("hashchange",()=>{ if(/^#(quick|enter)$/.test(location.hash) && Store.isUnlocked()) openQuick(); });
 </script>
 </body>
 </html>
