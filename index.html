@@ -570,6 +570,30 @@ tbody tr:last-child td{border-bottom:none}
   .kpi.hero{grid-column:span 1}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ===== Panic / anti-revenge button ===== */
+#breatheOverlay{z-index:520}
+.panic-fab{position:fixed;bottom:18px;inset-inline-end:16px;z-index:95;display:inline-flex;align-items:center;gap:8px;padding:12px 17px;border-radius:999px;background:linear-gradient(135deg,#ef4444,#8a3338);color:#fff;font-weight:800;font-size:14px;border:1px solid #ff8a8d;box-shadow:0 8px 24px rgba(239,68,68,.5);animation:panicPulse 2.2s infinite}
+.panic-fab:active{transform:scale(.96)}
+@keyframes panicPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.55),0 8px 24px rgba(0,0,0,.4)}50%{box-shadow:0 0 0 11px rgba(239,68,68,0),0 8px 24px rgba(0,0,0,.4)}}
+@media(max-width:480px){.panic-fab{bottom:14px;inset-inline-end:12px;padding:11px 14px;font-size:13px}}
+#panicOverlay{position:fixed;inset:0;z-index:510;background:radial-gradient(circle at 50% 28%, rgba(90,0,0,.94), rgba(8,4,6,.97));display:none;align-items:center;justify-content:center;padding:22px;overflow:auto}
+#panicOverlay.open{display:flex}
+.panic-box{max-width:440px;width:100%;text-align:center;display:flex;flex-direction:column;gap:13px;margin:auto 0}
+.panic-box .big{font-size:54px;line-height:1;animation:pulse 1.1s ease-in-out infinite}
+.panic-box h2{font-size:23px;color:#ff5a5f;line-height:1.2}
+.panic-box .msg{font-size:15px;color:#fff;line-height:1.6}
+.panic-stats{display:flex;flex-direction:column;gap:7px;background:rgba(239,68,68,.12);border:1px solid var(--red);border-radius:12px;padding:12px 14px;font-size:13.5px;color:#ffd5d6;text-align:start}
+.panic-stats b{color:#fff}
+.panic-box textarea,.panic-box input{width:100%;background:#0e0809;border:1px solid var(--line2);color:#fff;border-radius:10px;outline:none;font-size:14px;font-family:inherit}
+.panic-box textarea{padding:11px;min-height:58px;resize:vertical;line-height:1.5}
+.panic-box input{padding:12px;text-align:center;border-color:#ef4444}
+.panic-box .btn{justify-content:center;width:100%}
+.panic-lock{background:#1a0e10;border:1px solid #ef4444;color:#ff8a8d}
+.panic-lock:hover{background:#241115}
+.panic-close{background:#ef4444;color:#fff;border:none}
+.panic-close:disabled{opacity:.4;cursor:not-allowed}
+.panic-hint{font-size:12.5px;color:var(--faint);line-height:1.5}
 </style>
 </head>
 <body>
@@ -1203,6 +1227,23 @@ tbody tr:last-child td{border-bottom:none}
 
 <input type="file" id="importFile" accept="application/json" style="display:none">
 
+<!-- ============ PANIC / ANTI-REVENGE BUTTON ============ -->
+<button id="panicFab" class="panic-fab" title="עצור — רגע לפני עסקת נקמה">🆘 <span>עצור</span></button>
+<div id="panicOverlay">
+  <div class="panic-box">
+    <div class="big">🛑</div>
+    <h2>עצור — רגע לפני נקמה</h2>
+    <div class="msg" id="panicMsg"></div>
+    <div class="panic-stats" id="panicStats"></div>
+    <button class="btn btn-enter" id="panicBreathe">🫁 קח נשימה עכשיו</button>
+    <textarea id="panicNote" placeholder="מה אתה מרגיש עכשיו? כתוב — זה מוריד את הלחץ ושובר את הדחף."></textarea>
+    <button class="btn panic-lock" id="panicLock">🔒 נעל אותי למסחר היום — אני לא נכנס</button>
+    <div class="panic-hint">כדי לחזור בלי לנעול, הקלד מילה במילה: <b>אני סוחר ממושמע</b></div>
+    <input id="panicConfess" placeholder="אני סוחר ממושמע" autocomplete="off" autocapitalize="off">
+    <button class="btn panic-close" id="panicCloseBtn" disabled>אני רגוע — חזרה</button>
+  </div>
+</div>
+
 <button id="timerFab" class="timer-fab off" title="טיימר מסחר — הקש להפעלה/כיבוי" style="display:none">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/></svg>
   <span class="fab-txt">טיימר</span>
@@ -1815,8 +1856,36 @@ function openBreathe(reason){
 function closeBreathe(){
   if(breatheRAF){ cancelAnimationFrame(breatheRAF); breatheRAF=null; }
   $("#breatheOverlay").classList.remove("open");
-  document.body.style.overflow="";
+  document.body.style.overflow = $("#panicOverlay").classList.contains("open") ? "hidden" : "";
   toast("ראש נקי. קדימה 🧘");
+}
+
+/* ---------- panic / anti-revenge button ---------- */
+const PANIC_CONFESS="אני סוחר ממושמע";
+function openPanic(){
+  const lc=tiltLosses(), pnl=todayPnL(), streak=streakDays();
+  $("#panicMsg").textContent = lc>=2
+    ? `${lc} הפסדים רצופים היום. זה בדיוק הרגע שבו בעבר איבדת הכל. לא הפעם.`
+    : "אתה מרגיש את הדחף. עצור. ההפסד כבר קרה — הנקמה היא מה שהופך אותו לאסון.";
+  $("#panicStats").innerHTML = [
+    lc>=1 ? `🔴 <b>${lc}</b> הפסדים רצופים היום` : `🟢 אין הפסדים רצופים — שמור על הראש הנקי`,
+    `P&L היום: <b class="num">${sign(pnl)+fmtMoney(pnl)}</b>`,
+    `רצף נקי: <b>${streak} ימים</b> — דחף אחד מאפס אותו ומוחק שנים של ריבית דריבית`
+  ].map(s=>`<div>${s}</div>`).join("");
+  $("#panicNote").value=""; $("#panicConfess").value=""; $("#panicCloseBtn").disabled=true;
+  $("#panicOverlay").classList.add("open"); document.body.style.overflow="hidden";
+}
+function closePanic(){
+  if($("#panicConfess").value.trim()!==PANIC_CONFESS) return;
+  $("#panicOverlay").classList.remove("open"); document.body.style.overflow="";
+  toast("ראש נקי. אתה בשליטה 🧘");
+}
+function panicLockDay(){
+  if(!confirm("לנעול את המסחר להיום? לא תוכל להיכנס לעסקאות חדשות עד מחר. זו ההחלטה הכי חזקה שתעשה.")) return;
+  discipline.hardMode=true; discipline.lockUntilDay=today(); saveDiscipline();
+  try{ renderDiscipline(); renderDiscBar(); }catch(e){}
+  $("#panicOverlay").classList.remove("open"); document.body.style.overflow="";
+  toast("🔒 ננעלת למסחר היום. זו לא חולשה — זו עוצמה.");
 }
 function fmtCountdown(sec){ sec=Math.max(0,Math.round(sec)); const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60; return (h>0?pad2(h)+":":"")+pad2(m)+":"+pad2(s); }
 function setFab(cls,txt){ const f=$("#timerFab"); if(!f) return; f.className="timer-fab "+cls; const t=f.querySelector(".fab-txt"); if(t) t.textContent=txt; }
@@ -3284,6 +3353,11 @@ $("#btn3d").onclick=()=>set3d(!scene3d);
 $("#btnBreathe").onclick=()=>openBreathe();
 $("#breatheSkip").onclick=closeBreathe;
 $("#breatheDone").onclick=closeBreathe;
+$("#panicFab").onclick=openPanic;
+$("#panicBreathe").onclick=()=>openBreathe("tilt");
+$("#panicLock").onclick=panicLockDay;
+$("#panicConfess").addEventListener("input",()=>{ $("#panicCloseBtn").disabled = $("#panicConfess").value.trim()!==PANIC_CONFESS; });
+$("#panicCloseBtn").onclick=closePanic;
 $("#btnAdd").onclick=()=>openModal();
 $("#btnQuick").onclick=openQuick;
 $("#quickClose").onclick=closeQuick;
