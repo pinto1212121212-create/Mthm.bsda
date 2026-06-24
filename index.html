@@ -1494,6 +1494,7 @@ function migrateAccounts(){
   if(changed) save();
 }
 const acctName = id => { const a=accounts.find(x=>x.id===id); return a?a.name:"—"; };
+const acctEquity = id => { const a=accounts.find(x=>x.id===id); if(!a) return null; const net=trades.filter(t=>t.account===id).reduce((s,t)=>s+pnlOf(t),0); return (a.start||0)+net; };
 
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
@@ -2463,6 +2464,14 @@ function updateGuard(){
   const earlier=sameDay.filter(t=>new Date(t.date).getTime()<=when.getTime()).slice(-2).map(pnlOf);
   if(earlier.length===2 && earlier.every(p=>p<0)) items.push({tone:"bad",svg:ICON_ALERT,txt:`2 הפסדים רצופים היום — הכלל אומר לעצור. בטוח שאתה רוצה?`});
   if(isNaN(parseFloat($("#fldStop").value))) items.push({tone:"warn",svg:ICON_SHIELD,txt:`לא הגדרת סטופ‑לוס — אתה לא יודע כמה אתה מסכן`});
+  else {
+    const r=riskOf({instrument:$("#fldInstrument").value, entry:parseFloat($("#fldEntry").value), stop:parseFloat($("#fldStop").value), contracts:parseInt($("#fldContracts").value)||1});
+    const eq=acctEquity($("#fldAccount").value);
+    if(r&&eq&&eq>0){ const pct=r/eq*100;
+      if(pct>2) items.push({tone:"bad",svg:ICON_SHIELD,txt:`סיכון גבוה: ${fmtMoney(r)} = ${pct.toFixed(1)}% מהחשבון. מעל 2% זה הרבה — הקטן חוזים או הדק סטופ`});
+      else if(pct>1) items.push({tone:"warn",svg:ICON_SHIELD,txt:`סיכון ${fmtMoney(r)} = ${pct.toFixed(1)}% מהחשבון — בגבול העליון`});
+    }
+  }
   const emo=$("#fldEmoBefore").value;
   if(emo && emo!=="רגוע") items.push({tone:"bad",svg:ICON_ALERT,txt:`נכנס במצב «${emo}» — לפי הכלל שלך נכנסים רק כשרגועים`});
   const budgetSec=hmToMin(timer.budget)*60;
@@ -2594,7 +2603,16 @@ function liveCalc(){
     $("#lcR").textContent= r!=null?(sign(r)+r.toFixed(2)+"R"):"—"; $("#lcR").className="v "+(r!=null?clsPN(r):"");
   }
   if(isNaN(entry)||isNaN(stop)){ $("#lcRisk").textContent="—";$("#lcRisk").className="v"; }
-  else { const risk=riskOf({instrument:inst,entry,stop,contracts}); $("#lcRisk").textContent= risk?("-"+fmtMoney2(risk)):"—"; $("#lcRisk").className="v neg"; }
+  else {
+    const risk=riskOf({instrument:inst,entry,stop,contracts});
+    if(!risk){ $("#lcRisk").textContent="—"; $("#lcRisk").className="v"; }
+    else {
+      const eq=acctEquity($("#fldAccount").value);
+      const pct=(eq&&eq>0)?(risk/eq*100):null;
+      $("#lcRisk").innerHTML="-"+fmtMoney2(risk)+(pct!=null?` <span style="font-size:12px;opacity:.85">(${pct.toFixed(1)}%)</span>`:"");
+      $("#lcRisk").className="v "+(pct!=null&&pct>2?"neg":"");
+    }
+  }
 }
 
 function openModal(id, prefillDate){
@@ -3376,7 +3394,7 @@ $("#dirLong").onclick=()=>setDir("long");
 $("#dirShort").onclick=()=>setDir("short");
 $("#fldEmoBefore").addEventListener("change",paintEmotion);
 ["fldEntry","fldExit","fldStop","fldContracts","fldFees","fldInstrument","fldPnl"].forEach(id=>{ $("#"+id).addEventListener("input",liveCalc); $("#"+id).addEventListener("change",liveCalc); });
-["fldStop","fldEmoBefore","fldDate"].forEach(id=>{ $("#"+id).addEventListener("input",updateGuard); $("#"+id).addEventListener("change",updateGuard); });
+["fldStop","fldEmoBefore","fldDate","fldEntry","fldContracts","fldInstrument","fldAccount"].forEach(id=>{ $("#"+id).addEventListener("input",updateGuard); $("#"+id).addEventListener("change",updateGuard); });
 $("#btnExport").onclick=exportJSON;
 $("#btnImport").onclick=()=>$("#importFile").click();
 $("#importFile").onchange=e=>{ if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value=""; };
