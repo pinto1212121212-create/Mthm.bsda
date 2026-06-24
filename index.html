@@ -1508,7 +1508,7 @@ const fmtMoney2 = n => (n<0?"-":"") + "$" + Math.abs(n).toLocaleString("en-US",{
 const fmtNis = n => Math.round(Math.abs(n)).toLocaleString("en-US") + " ₪";   // discipline fines are tracked in shekels
 const sign = n => n>0?"+":"";
 const clsPN = n => n>0?"pos":(n<0?"neg":"dim");
-const isOpen = t => t.exit==null || t.exit==="" || isNaN(t.exit);
+const isOpen = t => (typeof t.pnlOverride!=="number") && (t.exit==null || t.exit==="" || isNaN(t.exit));
 
 function pnlOf(t){
   if(isOpen(t)) return 0;
@@ -1733,7 +1733,7 @@ function renderDay(){
     const op=isOpen(t);
     const p=pnlOf(t), r=rOf(t), dt=new Date(t.date);
     const tm=String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0");
-    const sub=`${t.entry} → ${op?'—':t.exit}`+(t.setup?" · "+escapeHtml(t.setup):"")+(!op&&r!=null?" · "+sign(r)+r.toFixed(2)+"R":"")+" · "+escapeHtml(acctName(t.account));
+    const sub=`${t.entry??"—"} → ${op?'—':(t.exit??"—")}`+(t.setup?" · "+escapeHtml(t.setup):"")+(!op&&r!=null?" · "+sign(r)+r.toFixed(2)+"R":"")+" · "+escapeHtml(acctName(t.account));
     return `<div class="day-trade">
       <div class="dt-time">${tm}</div>
       <div class="dt-main">
@@ -2157,7 +2157,7 @@ function renderTrades(){
       <td><span class="num" style="font-weight:600">${t.instrument}</span></td>
       <td><span class="dir-${t.direction}">${t.direction==="long"?"לונג":"שורט"}</span></td>
       <td><span class="num">${t.contracts}</span></td>
-      <td><span class="num dim">${t.entry}</span> → <span class="num dim">${op?'—':t.exit}</span></td>
+      <td><span class="num dim">${t.entry??"—"}</span> → <span class="num dim">${op?'—':(t.exit??"—")}</span></td>
       <td>${op?'<span class="tag-open">פתוחה</span>':`<span class="num ${clsPN(p)}" style="font-weight:700">${sign(p)+fmtMoney2(p)}</span>`}</td>
       <td><span class="num ${!op&&r!=null?clsPN(r):'dim'}">${!op&&r!=null?(sign(r)+r.toFixed(2)+"R"):"—"}</span></td>
       <td>${t.setup?`<span class="tag">${escapeHtml(t.setup)}</span>`:'<span class="dim">—</span>'}${(t.shots&&t.shots.length)?` <button class="shot-cam" onclick="openShotGallery('${t.id}')" title="צילומי מסך">📷${t.shots.length>1?t.shots.length:''}</button>`:''}</td>
@@ -2598,7 +2598,7 @@ function liveCalc(){
   const fees=parseFloat($("#fldFees").value)||0;
   const inst=$("#fldInstrument").value;
   const pnlOv=parseFloat($("#fldPnl").value); const hasOv=!isNaN(pnlOv); const signedOv=hasOv?Math.abs(pnlOv)*draftPnlSign:NaN;
-  if(isNaN(entry)||(isNaN(exit)&&!hasOv)){ $("#lcPnl").textContent="—";$("#lcPnl").className="v"; $("#lcR").textContent="—";$("#lcR").className="v"; }
+  if(!hasOv && (isNaN(entry)||isNaN(exit))){ $("#lcPnl").textContent="—";$("#lcPnl").className="v"; $("#lcR").textContent="—";$("#lcR").className="v"; }
   else {
     const t={instrument:inst,entry,exit:isNaN(exit)?entry:exit,contracts,stop:isNaN(stop)?null:stop,fees,direction:draftDir};
     if(hasOv) t.pnlOverride=signedOv;
@@ -2768,16 +2768,16 @@ function dayAtNow(dayStr){ const now=new Date(); const d=new Date(dayStr+"T00:00
 
 function saveTrade(){
   const entry=parseFloat($("#fldEntry").value), exit=parseFloat($("#fldExit").value);
-  if(isNaN(entry)){ toast("צריך לפחות מחיר כניסה"); return; }
-  const stop=parseFloat($("#fldStop").value), target=parseFloat($("#fldTarget").value);
   const pnlOv=parseFloat($("#fldPnl").value);
+  if(isNaN(entry) && isNaN(pnlOv)){ toast("צריך מחיר כניסה, או רווח/הפסד ידני"); return; }
+  const stop=parseFloat($("#fldStop").value), target=parseFloat($("#fldTarget").value);
   const t={
     id: editingId||uid(),
     date: new Date($("#fldDate").value||Date.now()).toISOString(),
     instrument: $("#fldInstrument").value,
     direction: draftDir,
     contracts: parseInt($("#fldContracts").value)||1,
-    entry, exit: isNaN(exit)?(isNaN(pnlOv)?null:entry):exit,
+    entry: isNaN(entry)?null:entry, exit: isNaN(exit)?null:exit,
     stop: isNaN(stop)?null:stop,
     target: isNaN(target)?null:target,
     fees: parseFloat($("#fldFees").value)||0,
