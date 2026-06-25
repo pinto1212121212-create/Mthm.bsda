@@ -607,6 +607,9 @@ tbody tr:last-child td{border-bottom:none}
 .cd-entry .cd-g{font-size:13.5px;color:var(--txt);line-height:1.5}
 .cd-entry .cd-w{font-size:13px;color:var(--muted);line-height:1.5;margin-top:3px}
 .cd-entry .cd-sc{color:var(--amber);font-size:13px}
+#journeyOverlay{z-index:530}
+.journey-text{font-size:16.5px;line-height:1.75;color:var(--txt);text-align:center;max-width:420px;min-height:150px;display:flex;flex-direction:column;justify-content:center}
+.journey-text b{font-size:19px;color:var(--amber);display:block;margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -869,6 +872,7 @@ tbody tr:last-child td{border-bottom:none}
     <div class="panel coach-daily">
       <div class="panel-h"><h3>🧠 המאמן היומי</h3><span class="hint">סחור את התהליך, לא את התוצאה</span></div>
       <div class="cd-mantra">"זה כבר אבוד. עכשיו אני פשוט סוחר נכון — המעבר יבוא לבד."</div>
+      <button class="btn btn-enter" id="cdJourney" style="width:100%;justify-content:center;margin-bottom:6px">🧘 התחל מסע מנטלי (6 דק׳)</button>
       <label class="cd-lbl">🎯 יעד התהליך שלי היום</label>
       <input id="cdGoal" placeholder="לדוגמה: מקס׳ 3 עסקאות · רק כשרגוע · סטופ תמיד">
       <label class="cd-lbl">✅ מה עבד היום? (הדבר הטוב שעשיתי — אחזור עליו)</label>
@@ -1252,6 +1256,19 @@ tbody tr:last-child td{border-bottom:none}
     <div class="breathe-actions">
       <button class="btn btn-ghost" id="breatheSkip">דלג</button>
       <button class="btn btn-enter" id="breatheDone" style="display:none">אני רגוע — קדימה</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MENTAL JOURNEY (guided) ============ -->
+<div class="overlay breathe-overlay" id="journeyOverlay">
+  <div class="breathe-box">
+    <div class="breathe-stage" style="height:150px"><div class="breathe-orb" id="journeyOrb" style="width:120px;height:120px"><span style="font-size:38px">🧘</span></div></div>
+    <div class="journey-text" id="journeyText"></div>
+    <div class="breathe-count" id="journeyStep"></div>
+    <div class="breathe-actions">
+      <button class="btn btn-ghost" id="journeySkip">סגור</button>
+      <button class="btn btn-enter" id="journeyNext">המשך ←</button>
     </div>
   </div>
 </div>
@@ -1919,6 +1936,27 @@ function panicLockDay(){
   $("#panicOverlay").classList.remove("open"); document.body.style.overflow="";
   toast("🔒 ננעלת למסחר היום. זו לא חולשה — זו עוצמה.");
 }
+/* ---------- guided mental journey (mental rehearsal · identity · anchor) ---------- */
+const JOURNEY=[
+  {h:"מסע מנטלי", t:"6 דקות שיכוונו לך את הראש לפני המסחר.\nשב נוח. הנח את הכתפיים. נשום עמוק.\nכשאתה מוכן — לחץ «המשך»."},
+  {h:"הרגעה", t:"קח שלוש נשימות עמוקות, לאט.\nשאיפה דרך האף… החזק שתיים… נשיפה ארוכה דרך הפה.\nשוב. הרגש איך הגוף משתחרר.\nואחת אחרונה. אתה כאן. נוכח."},
+  {h:"העמקה", t:"ספור איתי לאחור, בלב, מ‑5 ל‑1.\nעם כל מספר אתה שוקע עמוק יותר לרוגע.\n5… הגוף נרגע. 4… המחשבות מאטות.\n3… 2… 1.\nאתה רגוע לחלוטין."},
+  {h:"שחרור 4 השנים", t:"4 שנים נשאת לחץ כבד.\nדמיין אותו כתרמיל ענק על הגב — כל ה«חייב לעבור», כל הפחד.\nעכשיו… אתה מוריד אותו לרצפה.\nאתה קל. חופשי. זה כבר לא שלך."},
+  {h:"חיזיון — הסוחר הרגוע", t:"ראה את עצמך מחר, מול המסך.\nעסקה נכנסת להפסד.\nראה את עצמך — רגוע לגמרי. הדופק יציב.\nאתה מסתכל על הסטופ, לא על הכסף.\nסוגר לפי התוכנית. קם. שותה מים. בלי נקמה.\nראה את זה ברור. ככה זה ייראה."},
+  {h:"התקנת זהות", t:"חזור אחריי, בלב או בקול:\n«אני סוחר רגוע.\nאני סוחר את התהליך.\nההפסד לא מזיז אותי.\nאני לא חייב לעבור — אני פשוט סוחר נכון.»\nשוב. תרגיש את המילים."},
+  {h:"העוגן", t:"עכשיו, במצב הרוגע הזה —\nלחץ את האגודל והאצבע יחד, חזק.\nזה העוגן שלך.\nבכל פעם שתעשה את זה במסחר — הרוגע הזה יחזור.\nלחץ… והרגש את הרוגע נכנס לאצבעות.\nשחרר."},
+  {h:"חזרה", t:"קח נשימה אחרונה ועמוקה.\nספור מ‑1 ל‑3, ועם 3 אתה חוזר — ערני, רגוע, חד.\n1… 2… 3.\nאתה מוכן. לך תסחור את התהליך."}
+];
+let journeyIdx=0;
+function renderJourney(){
+  const s=JOURNEY[journeyIdx];
+  $("#journeyText").innerHTML="<b>"+escapeHtml(s.h)+"</b>"+escapeHtml(s.t).replace(/\n/g,"<br>");
+  $("#journeyStep").textContent=(journeyIdx+1)+" / "+JOURNEY.length;
+  $("#journeyNext").textContent = journeyIdx>=JOURNEY.length-1 ? "סיימתי — אני רגוע" : "המשך ←";
+}
+function openJourney(){ journeyIdx=0; renderJourney(); $("#journeyOverlay").classList.add("open"); document.body.style.overflow="hidden"; }
+function journeyNext(){ if(journeyIdx>=JOURNEY.length-1){ closeJourney(); return; } journeyIdx++; renderJourney(); }
+function closeJourney(){ $("#journeyOverlay").classList.remove("open"); document.body.style.overflow=""; toast("הראש מכוון. אתה רגוע 🧘"); }
 function fmtCountdown(sec){ sec=Math.max(0,Math.round(sec)); const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60; return (h>0?pad2(h)+":":"")+pad2(m)+":"+pad2(s); }
 function setFab(cls,txt){ const f=$("#timerFab"); if(!f) return; f.className="timer-fab "+cls; const t=f.querySelector(".fab-txt"); if(t) t.textContent=txt; }
 function tickTimer(){
@@ -3437,6 +3475,9 @@ $("#breatheDone").onclick=closeBreathe;
 $("#panicFab").onclick=openPanic;
 $("#panicBreathe").onclick=()=>openBreathe("tilt");
 $("#panicLock").onclick=panicLockDay;
+$("#cdJourney").onclick=openJourney;
+$("#journeyNext").onclick=journeyNext;
+$("#journeySkip").onclick=closeJourney;
 $("#panicConfess").addEventListener("input",()=>{ $("#panicCloseBtn").disabled = $("#panicConfess").value.trim()!==PANIC_CONFESS; });
 $("#panicCloseBtn").onclick=closePanic;
 $("#btnAdd").onclick=()=>openModal();
