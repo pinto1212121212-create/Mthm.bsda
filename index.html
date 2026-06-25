@@ -594,6 +594,19 @@ tbody tr:last-child td{border-bottom:none}
 .panic-close{background:#ef4444;color:#fff;border:none}
 .panic-close:disabled{opacity:.4;cursor:not-allowed}
 .panic-hint{font-size:12.5px;color:var(--faint);line-height:1.5}
+
+/* ===== Daily coach ===== */
+.coach-daily .cd-mantra{background:linear-gradient(135deg,rgba(232,184,75,.12),var(--bg2));border:1px solid var(--amber);border-radius:12px;padding:13px 15px;font-size:15px;font-weight:600;color:#f3dca0;text-align:center;line-height:1.55;margin-bottom:16px}
+.coach-daily .cd-lbl{display:block;font-size:13px;font-weight:600;color:var(--txt);margin:14px 0 7px}
+.coach-daily input,.coach-daily textarea{width:100%;background:var(--panel);border:1px solid var(--line2);color:var(--txt);padding:10px 12px;border-radius:10px;outline:none;font-family:inherit;font-size:14px}
+.coach-daily input:focus,.coach-daily textarea:focus{border-color:var(--amber)}
+.coach-daily textarea{resize:vertical;min-height:62px;line-height:1.5}
+.cd-log{margin-top:18px;border-top:1px solid var(--line);padding-top:8px}
+.cd-entry{padding:12px 0;border-bottom:1px solid var(--line)}
+.cd-entry .cd-d{font-size:11.5px;color:var(--faint);font-family:'JetBrains Mono',monospace;margin-bottom:5px}
+.cd-entry .cd-g{font-size:13.5px;color:var(--txt);line-height:1.5}
+.cd-entry .cd-w{font-size:13px;color:var(--muted);line-height:1.5;margin-top:3px}
+.cd-entry .cd-sc{color:var(--amber);font-size:13px}
 </style>
 </head>
 <body>
@@ -852,6 +865,20 @@ tbody tr:last-child td{border-bottom:none}
         <h3>המאמן שלך</h3>
         <p id="coachIntro"></p>
       </div>
+    </div>
+    <div class="panel coach-daily">
+      <div class="panel-h"><h3>🧠 המאמן היומי</h3><span class="hint">סחור את התהליך, לא את התוצאה</span></div>
+      <div class="cd-mantra">"זה כבר אבוד. עכשיו אני פשוט סוחר נכון — המעבר יבוא לבד."</div>
+      <label class="cd-lbl">🎯 יעד התהליך שלי היום</label>
+      <input id="cdGoal" placeholder="לדוגמה: מקס׳ 3 עסקאות · רק כשרגוע · סטופ תמיד">
+      <label class="cd-lbl">✅ מה עבד היום? (הדבר הטוב שעשיתי — אחזור עליו)</label>
+      <textarea id="cdWorked" placeholder="מתי הייתי רגוע וחד? מה אשכפל מחר?"></textarea>
+      <label class="cd-lbl">📏 עמדתי בתהליך שלי היום?</label>
+      <div class="stars" id="cdScore"></div>
+      <label class="cd-lbl">💡 הלקח / Best practice להיום</label>
+      <textarea id="cdLesson" placeholder="המשפט אחד שאני לוקח איתי"></textarea>
+      <button class="btn btn-primary" id="cdSave" style="margin-top:12px;width:100%;justify-content:center">שמור מאמן יומי</button>
+      <div id="cdLog"></div>
     </div>
     <div class="insights" id="insights"></div>
   </div>
@@ -2314,7 +2341,35 @@ function buildInsights(list){
 
   return out;
 }
+/* ---------- daily coach (Steenbarger-style: process goal + what worked + score) ---------- */
+let coachLog=[]; const COACH_KEY="nasdaq_coach_v1"; let cdScoreVal=0;
+function loadCoach(){ try{ const c=JSON.parse(Store.get(COACH_KEY)||"[]"); coachLog=Array.isArray(c)?c:[]; }catch(e){ coachLog=[]; } }
+function saveCoach(){ Store.set(COACH_KEY, JSON.stringify(coachLog)); }
+function paintCdScore(){ $$("#cdScore button").forEach(b=>b.classList.toggle("on", parseInt(b.dataset.s)<=cdScoreVal)); }
+function buildCdScore(){ const el=$("#cdScore"); if(!el||el.dataset.built) return; el.dataset.built="1"; el.innerHTML=[1,2,3,4,5].map(i=>`<button type="button" data-s="${i}">★</button>`).join(""); $$("#cdScore button").forEach(b=>b.onclick=()=>{ cdScoreVal=parseInt(b.dataset.s); paintCdScore(); }); }
+function renderCoachDaily(){
+  if(!$("#cdGoal")) return;
+  buildCdScore();
+  const t=coachLog.find(x=>x.day===today());
+  $("#cdGoal").value=t?(t.goal||""):""; $("#cdWorked").value=t?(t.worked||""):""; $("#cdLesson").value=t?(t.lesson||""):"";
+  cdScoreVal=t?(t.score||0):0; paintCdScore();
+  const log=coachLog.slice().filter(x=>x.day!==today()).reverse().slice(0,10);
+  $("#cdLog").innerHTML = log.length ? `<div class="cd-log">`+log.map(x=>{
+    const d=new Date(x.day+"T00:00:00"); const ds=pad2(d.getDate())+"/"+pad2(d.getMonth()+1)+"/"+d.getFullYear();
+    return `<div class="cd-entry"><div class="cd-d">${ds} · <span class="cd-sc">${"★".repeat(x.score||0)}</span></div>`
+      +(x.goal?`<div class="cd-g">🎯 ${escapeHtml(x.goal)}</div>`:"")
+      +(x.worked?`<div class="cd-w">✅ ${escapeHtml(x.worked)}</div>`:"")
+      +(x.lesson?`<div class="cd-w">💡 ${escapeHtml(x.lesson)}</div>`:"")+`</div>`;
+  }).join("")+`</div>` : "";
+}
+function saveTodayCoach(){
+  const d=today();
+  const entry={day:d, goal:$("#cdGoal").value.trim(), worked:$("#cdWorked").value.trim(), lesson:$("#cdLesson").value.trim(), score:cdScoreVal, at:Date.now()};
+  const i=coachLog.findIndex(x=>x.day===d); if(i>=0) coachLog[i]=entry; else coachLog.push(entry);
+  saveCoach(); renderCoachDaily(); toast("המאמן היומי נשמר ✓");
+}
 function renderCoach(){
+  renderCoachDaily();
   const intro=$("#coachIntro"); if(!intro) return;
   const list=getClosed();
   if(list.length<3){
@@ -3235,7 +3290,7 @@ function lockApp(){
 }
 function resetLockTimer(){ clearTimeout(lockTimer); if(Store.isUnlocked() && !Store.isRemembered()) lockTimer=setTimeout(lockApp, LOCK_MS); }
 function bootData(){
-  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline();
+  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline(); loadCoach();
   buildAccountOptions(); syncTimerInputs(); paintEmotion();
   scene3d = !reduceMo && Store.get("nasdaq_3d")!=="off";
   renderAll(); renderDiscipline(); renderBackupReminder();
@@ -3389,6 +3444,7 @@ $("#btnQuick").onclick=openQuick;
 $("#quickClose").onclick=closeQuick;
 $("#quickCancel").onclick=closeQuick;
 $("#quickSave").onclick=saveQuick;
+$("#cdSave").onclick=saveTodayCoach;
 $("#qAutoFocus").onchange=()=>{ quickOnFocus=$("#qAutoFocus").checked; localStorage.setItem("ui_quickfocus", quickOnFocus?"on":"off"); toast(quickOnFocus?"מצב בועה פעיל — 'נכנסתי' ייפתח אוטומטית":"מצב בועה כבוי"); };
 document.addEventListener("visibilitychange",()=>{
   if(document.hidden || !quickOnFocus || !Store.isUnlocked()) return;
