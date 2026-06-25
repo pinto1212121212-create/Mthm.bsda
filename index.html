@@ -1111,6 +1111,27 @@ tbody tr:last-child td{border-bottom:none}
         <input type="number" class="num" id="acctStart" placeholder="יתרת פתיחה $" step="100">
         <button class="btn btn-primary" id="acctAddBtn">הוסף</button>
       </div>
+      <div id="burnedLog"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ BURNED ACCOUNT POST-MORTEM ============ -->
+<div class="overlay" id="burnedOverlay">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-h">
+      <h2>🔥 חשבון שנשרף</h2>
+      <button id="burnedClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-b">
+      <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px">כל חשבון שנשרף הוא שיעור ששילמת עליו. תכתוב בכנות — זה מה שימנע את הבא.</p>
+      <div class="field full" style="margin-bottom:14px"><label>למה החשבון נשרף?</label><textarea id="burnWhy" placeholder="מה קרה? איזו עסקה / יום / החלטה הפילו אותו?"></textarea></div>
+      <div class="field full" style="margin-bottom:14px"><label>הטעות העיקרית</label><div class="chips" id="burnMistakes"></div></div>
+      <div class="field full"><label>מה אני לומד מזה להבא?</label><textarea id="burnLesson" placeholder="הכלל/המשפט שאקח קדימה — שלא יקרה שוב"></textarea></div>
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-ghost" id="burnedCancel">ביטול</button>
+      <button class="btn btn-primary" id="burnedSave">שמור שיעור 🔥</button>
     </div>
   </div>
 </div>
@@ -2629,14 +2650,16 @@ function renderAccounts(){
     const mine=trades.filter(t=>t.account===a.id);
     const net=mine.reduce((s,t)=>s+pnlOf(t),0);
     const bal=(a.start||0)+net;
-    return `<div class="acct-item">
+    return `<div class="acct-item"${a.burned?' style="opacity:.7"':''}>
       <div class="ainfo">
-        <div class="aname" contenteditable="true" spellcheck="false" data-id="${a.id}">${escapeHtml(a.name)}</div>
+        <div class="aname" contenteditable="true" spellcheck="false" data-id="${a.id}">${a.burned?'🔥 ':''}${escapeHtml(a.name)}</div>
         <div class="abal">פתיחה $<span class="astart" contenteditable="true" spellcheck="false" data-id="${a.id}">${Math.round(a.start||0)}</span> · יתרה ${fmtMoney2(bal)} · נטו <span class="${clsPN(net)}">${sign(net)+fmtMoney(net)}</span> · ${mine.length} עסק׳</div>
       </div>
+      <button class="adel aburn" data-id="${a.id}" title="סמן: החשבון נשרף" style="font-size:16px">🔥</button>
       <button class="adel" data-id="${a.id}" title="מחק חשבון"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
     </div>`;
   }).join("");
+  renderBurnedLog();
   $$("#acctList .aname").forEach(node=>{
     node.addEventListener("blur",()=>{ const a=accounts.find(x=>x.id===node.dataset.id); if(!a)return; const v=node.textContent.trim(); if(v){ a.name=v; saveAccounts(); buildAccountOptions(); renderAll(); } else node.textContent=a.name; });
     node.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); node.blur(); } });
@@ -2645,7 +2668,41 @@ function renderAccounts(){
     node.addEventListener("blur",()=>{ const a=accounts.find(x=>x.id===node.dataset.id); if(!a)return; const v=parseFloat(String(node.textContent).replace(/[^0-9.\-]/g,"")); a.start=isNaN(v)?0:v; saveAccounts(); buildAccountOptions(); renderAccounts(); renderAll(); });
     node.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); node.blur(); } });
   });
-  $$("#acctList .adel").forEach(b=>b.onclick=()=>delAccount(b.dataset.id));
+  $$("#acctList .aburn").forEach(b=>b.onclick=()=>openBurned(b.dataset.id));
+  $$("#acctList .adel:not(.aburn)").forEach(b=>b.onclick=()=>delAccount(b.dataset.id));
+}
+/* ---------- burned-account post-mortem (turn a blown account into a lesson) ---------- */
+let burned=[]; const BURNED_KEY="nasdaq_burned_v1"; let burnAcctId=null, burnMistakes=new Set();
+function loadBurned(){ try{ const b=JSON.parse(Store.get(BURNED_KEY)||"[]"); burned=Array.isArray(b)?b:[]; }catch(e){ burned=[]; } }
+function saveBurned(){ Store.set(BURNED_KEY, JSON.stringify(burned)); }
+function openBurned(id){
+  burnAcctId=id; burnMistakes=new Set();
+  $("#burnWhy").value=""; $("#burnLesson").value="";
+  $("#burnMistakes").innerHTML=MISTAKES.map(m=>`<button type="button" class="chip" data-m="${escapeHtml(m)}">${escapeHtml(m)}</button>`).join("");
+  $$("#burnMistakes .chip").forEach(c=>c.onclick=()=>{ const m=c.dataset.m; if(burnMistakes.has(m)){burnMistakes.delete(m);c.classList.remove("on");}else{burnMistakes.add(m);c.classList.add("on");} });
+  $("#burnedOverlay").classList.add("open"); document.body.style.overflow="hidden";
+}
+function closeBurned(){ $("#burnedOverlay").classList.remove("open"); document.body.style.overflow= $("#acctOverlay").classList.contains("open")?"hidden":""; }
+function saveBurnedRec(){
+  const a=accounts.find(x=>x.id===burnAcctId); if(!a){ closeBurned(); return; }
+  const net=trades.filter(t=>t.account===a.id).reduce((s,t)=>s+pnlOf(t),0);
+  burned.push({ id:uid(), name:a.name, why:$("#burnWhy").value.trim(), mistakes:[...burnMistakes], lesson:$("#burnLesson").value.trim(), net, at:Date.now() });
+  saveBurned(); a.burned=true; saveAccounts();
+  closeBurned(); renderAccounts(); toast("השיעור נשמר 🔥 — אל תחזור עליו");
+}
+function renderBurnedLog(){
+  const el=$("#burnedLog"); if(!el) return;
+  if(!burned.length){ el.innerHTML=""; return; }
+  el.innerHTML=`<div class="disc-shame" style="margin-top:18px"><div class="panel-h" style="margin-top:6px"><h3 style="font-size:14px">🔥 קבר השיעורים — חשבונות שנשרפו</h3><span class="hint">${burned.length}</span></div>`+
+    burned.slice().reverse().map(b=>{
+      const d=new Date(b.at); const ds=pad2(d.getDate())+"/"+pad2(d.getMonth()+1)+"/"+d.getFullYear();
+      return `<div class="shame-row" style="flex-direction:column;align-items:stretch;gap:5px">
+        <div style="display:flex;justify-content:space-between"><b>${escapeHtml(b.name)}</b><span class="sd">${ds}</span></div>
+        ${b.why?`<div>למה: ${escapeHtml(b.why)}</div>`:""}
+        ${b.mistakes&&b.mistakes.length?`<div style="color:#ff8a8d">טעות: ${b.mistakes.map(escapeHtml).join(" · ")}</div>`:""}
+        ${b.lesson?`<div style="color:#7ee0b8">💡 לקח: ${escapeHtml(b.lesson)}</div>`:""}
+      </div>`;
+    }).join("")+`</div>`;
 }
 function addAccount(){
   const name=$("#acctName").value.trim(); if(!name) return;
@@ -3333,7 +3390,7 @@ function lockApp(){
 }
 function resetLockTimer(){ clearTimeout(lockTimer); if(Store.isUnlocked() && !Store.isRemembered()) lockTimer=setTimeout(lockApp, LOCK_MS); }
 function bootData(){
-  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline(); loadCoach();
+  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline(); loadCoach(); loadBurned();
   buildAccountOptions(); syncTimerInputs(); paintEmotion();
   scene3d = !reduceMo && Store.get("nasdaq_3d")!=="off";
   renderAll(); renderDiscipline(); renderBackupReminder();
@@ -3534,6 +3591,10 @@ $("#acctManage").onclick=openAcct;
 $("#acctClose").onclick=closeAcct;
 $("#acctOverlay").onclick=e=>{ if(e.target.id==="acctOverlay") closeAcct(); };
 $("#acctAddBtn").onclick=addAccount;
+$("#burnedSave").onclick=saveBurnedRec;
+$("#burnedClose").onclick=closeBurned;
+$("#burnedCancel").onclick=closeBurned;
+$("#burnedOverlay").onclick=e=>{ if(e.target.id==="burnedOverlay") closeBurned(); };
 $("#acctName").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addAccount(); } });
 $("#tmBudget").onchange=()=>{ timer.budget=$("#tmBudget").value||"00:00"; saveTimer(); tickTimer(); renderAll(); };
 $("#tmGrace").onchange=()=>{ timer.grace=Math.max(0,Math.min(60,parseInt($("#tmGrace").value)||0)); saveTimer(); tickTimer(); renderAll(); };
