@@ -1117,6 +1117,7 @@ tbody tr:last-child td{border-bottom:none}
           <input type="number" class="num" id="qEntry" step="0.25" inputmode="decimal" placeholder="0.00">
         </div>
       </div>
+      <label class="lock-remember" style="margin-top:14px"><input type="checkbox" id="qAutoFocus"> מצב בועה — פתח טופס זה אוטומטית בכל פעם שחוזרים לאפליקציה</label>
     </div>
     <div class="modal-f">
       <button class="btn btn-ghost" id="quickCancel">ביטול</button>
@@ -2713,6 +2714,7 @@ function gcShots(){                                   // drop image keys no trad
 
 /* ---------- quick entry (open positions) ---------- */
 let qDir="long";
+let quickOnFocus = localStorage.getItem("ui_quickfocus")==="on";   // "bubble mode": auto-open quick entry on app focus
 function setQDir(d){ qDir=d; $("#qDirLong").classList.toggle("on-long",d==="long"); $("#qDirShort").classList.toggle("on-short",d==="short"); }
 function openQuick(){
   if(!guardEntry()) return;                 // hard discipline gate
@@ -2721,6 +2723,7 @@ function openQuick(){
   $("#qAccount").value=$("#fAccount").value || (accounts[0]&&accounts[0].id) || "";
   $("#qContracts").value=1;
   $("#qEntry").value="";
+  if($("#qAutoFocus")) $("#qAutoFocus").checked=quickOnFocus;
   $("#quickOverlay").classList.add("open");
   document.body.style.overflow="hidden";
   setTimeout(()=>{ const e=$("#qEntry"); if(e) e.focus(); },60);
@@ -3386,6 +3389,13 @@ $("#btnQuick").onclick=openQuick;
 $("#quickClose").onclick=closeQuick;
 $("#quickCancel").onclick=closeQuick;
 $("#quickSave").onclick=saveQuick;
+$("#qAutoFocus").onchange=()=>{ quickOnFocus=$("#qAutoFocus").checked; localStorage.setItem("ui_quickfocus", quickOnFocus?"on":"off"); toast(quickOnFocus?"מצב בועה פעיל — 'נכנסתי' ייפתח אוטומטית":"מצב בועה כבוי"); };
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden || !quickOnFocus || !Store.isUnlocked()) return;
+  if(document.querySelector(".overlay.open")) return;                 // a modal is already open
+  if(!$("#lockOverlay").classList.contains("hidden")) return;          // locked
+  setTimeout(openQuick,150);                                           // bubble re-opened → jump straight to entry
+});
 $("#quickOverlay").onclick=e=>{ if(e.target.id==="quickOverlay") closeQuick(); };
 $("#qDirLong").onclick=()=>setQDir("long");
 $("#qDirShort").onclick=()=>setQDir("short");
