@@ -2655,10 +2655,15 @@ function addAccount(){
   buildAccountOptions(); renderAccounts(); renderAll();
 }
 function delAccount(id){
-  const cnt=trades.filter(t=>t.account===id).length;
-  if(cnt>0){ toast("יש "+cnt+" עסקאות בחשבון — אי אפשר למחוק"); return; }
   if(accounts.length<=1){ toast("חייב להישאר לפחות חשבון אחד"); return; }
-  if(!confirm("למחוק את החשבון?")) return;
+  const cnt=trades.filter(t=>t.account===id).length;
+  if(cnt>0){
+    if(!confirm("בחשבון הזה "+cnt+" עסקאות. מחיקת החשבון תמחק גם אותן לצמיתות. להמשיך?")) return;
+    trades=trades.filter(t=>t.account!==id);
+    save(); gcShots();
+  } else {
+    if(!confirm("למחוק את החשבון?")) return;
+  }
   accounts=accounts.filter(a=>a.id!==id); saveAccounts(); buildAccountOptions(); renderAccounts(); renderAll();
 }
 function openAcct(){ renderAccounts(); $("#acctOverlay").classList.add("open"); document.body.style.overflow="hidden"; }
