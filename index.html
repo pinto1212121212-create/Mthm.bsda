@@ -2635,14 +2635,15 @@ function populateFilterOptions(){
 
 /* ---------- accounts UI ---------- */
 function buildAccountOptions(){
+  const active=accounts.filter(a=>!a.burned);   // burned accounts drop out of the active selectors
   const cur=$("#fAccount").value;
-  $("#fAccount").innerHTML=`<option value="">כל החשבונות</option>`+accounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
-  $("#fAccount").value = accounts.some(a=>a.id===cur)?cur:"";
+  $("#fAccount").innerHTML=`<option value="">כל החשבונות</option>`+active.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
+  $("#fAccount").value = active.some(a=>a.id===cur)?cur:"";
   const curF=$("#fldAccount").value;
-  const acctOpts=accounts.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
+  const acctOpts=active.map(a=>`<option value="${a.id}">${escapeHtml(a.name)}</option>`).join("");
   $("#fldAccount").innerHTML=acctOpts;
-  if(accounts.some(a=>a.id===curF)) $("#fldAccount").value=curF;
-  const q=$("#qAccount"); if(q){ const curQ=q.value; q.innerHTML=acctOpts; if(accounts.some(a=>a.id===curQ)) q.value=curQ; }
+  if(active.some(a=>a.id===curF)) $("#fldAccount").value=curF;
+  const q=$("#qAccount"); if(q){ const curQ=q.value; q.innerHTML=acctOpts; if(active.some(a=>a.id===curQ)) q.value=curQ; }
 }
 function renderAccounts(){
   const el=$("#acctList"); if(!el) return;
@@ -2688,7 +2689,7 @@ function saveBurnedRec(){
   const net=trades.filter(t=>t.account===a.id).reduce((s,t)=>s+pnlOf(t),0);
   burned.push({ id:uid(), name:a.name, why:$("#burnWhy").value.trim(), mistakes:[...burnMistakes], lesson:$("#burnLesson").value.trim(), net, at:Date.now() });
   saveBurned(); a.burned=true; saveAccounts();
-  closeBurned(); renderAccounts(); toast("השיעור נשמר 🔥 — אל תחזור עליו");
+  closeBurned(); buildAccountOptions(); renderAccounts(); renderAll(); toast("השיעור נשמר 🔥 — החשבון ירד מהתפריט");
 }
 function renderBurnedLog(){
   const el=$("#burnedLog"); if(!el) return;
