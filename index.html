@@ -884,6 +884,13 @@ tbody tr:last-child td{border-bottom:none}
       <button class="btn btn-primary" id="cdSave" style="margin-top:12px;width:100%;justify-content:center">שמור מאמן יומי</button>
       <div id="cdLog"></div>
     </div>
+    <div class="panel coach-daily">
+      <div class="panel-h"><h3>✍️ כתיבה חופשית</h3><span class="hint">בלי טבלאות · בלי ציונים · רק מה שעבר עליך</span></div>
+      <div class="cd-mantra">"אתה לא נמדד ביומן, בדיוק כמו שאתה לא נמדד בעסקה."</div>
+      <textarea id="fwText" placeholder="גם ביום שלא סחרתי, ולא מילאתי כלום — פה אני פשוט כותב. מה הרגשתי? מה עבר עליי? מה למדתי? כותב חופשי, מהלב." style="min-height:120px"></textarea>
+      <button class="btn btn-primary" id="fwSave" style="margin-top:10px;width:100%;justify-content:center">שמור רשומה</button>
+      <div id="fwLog"></div>
+    </div>
     <div class="insights" id="insights"></div>
   </div>
 
@@ -2428,8 +2435,35 @@ function saveTodayCoach(){
   const i=coachLog.findIndex(x=>x.day===d); if(i>=0) coachLog[i]=entry; else coachLog.push(entry);
   saveCoach(); renderCoachDaily(); toast("המאמן היומי נשמר ✓");
 }
+/* ---------- free writing journal (no tables, no scores) ---------- */
+let freeLog=[]; const FREE_KEY="nasdaq_freewrite_v1";
+function loadFree(){ try{ const f=JSON.parse(Store.get(FREE_KEY)||"[]"); freeLog=Array.isArray(f)?f:[]; }catch(e){ freeLog=[]; } }
+function saveFree(){ Store.set(FREE_KEY, JSON.stringify(freeLog)); }
+function renderFree(){
+  const log=$("#fwLog"); if(!log) return;
+  const items=freeLog.slice().sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,60);
+  log.innerHTML = items.length ? `<div class="cd-log">`+items.map(x=>{
+    const d=new Date(x.at||(x.day+"T00:00:00"));
+    const ds=pad2(d.getDate())+"/"+pad2(d.getMonth()+1)+"/"+d.getFullYear();
+    const ts=pad2(d.getHours())+":"+pad2(d.getMinutes());
+    return `<div class="cd-entry"><div class="cd-d">${ds} · ${ts} <button class="fw-del" data-id="${x.id}" title="מחק" style="float:left;background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px">✕</button></div>`
+      +`<div class="cd-w" style="white-space:pre-wrap">${escapeHtml(x.text)}</div></div>`;
+  }).join("")+`</div>` : `<div class="day-empty" style="margin-top:10px">עוד לא כתבת כלום — הדף הזה מחכה לך 🕊️</div>`;
+  $$("#fwLog .fw-del").forEach(b=>b.onclick=()=>delFreeEntry(b.dataset.id));
+}
+function saveFreeEntry(){
+  const el=$("#fwText"); if(!el) return;
+  const text=el.value.trim(); if(!text){ toast("כתוב משהו קודם ✍️"); return; }
+  freeLog.push({ id:"fw"+Date.now()+"_"+Math.random().toString(36).slice(2,7), day:today(), at:Date.now(), text });
+  saveFree(); el.value=""; renderFree(); toast("נשמר ✓ כל הכבוד שכתבת");
+}
+function delFreeEntry(id){
+  if(!confirm("למחוק את הרשומה?")) return;
+  freeLog=freeLog.filter(x=>x.id!==id); saveFree(); renderFree();
+}
 function renderCoach(){
   renderCoachDaily();
+  renderFree();
   const intro=$("#coachIntro"); if(!intro) return;
   const list=getClosed();
   if(list.length<3){
@@ -3392,7 +3426,7 @@ function lockApp(){
 }
 function resetLockTimer(){ clearTimeout(lockTimer); if(Store.isUnlocked() && !Store.isRemembered()) lockTimer=setTimeout(lockApp, LOCK_MS); }
 function bootData(){
-  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline(); loadCoach(); loadBurned();
+  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline(); loadCoach(); loadFree(); loadBurned();
   buildAccountOptions(); syncTimerInputs(); paintEmotion();
   scene3d = !reduceMo && Store.get("nasdaq_3d")!=="off";
   renderAll(); renderDiscipline(); renderBackupReminder();
@@ -3540,6 +3574,7 @@ $("#panicFab").onclick=openPanic;
 $("#panicBreathe").onclick=()=>openBreathe("tilt");
 $("#panicLock").onclick=panicLockDay;
 $("#cdJourney").onclick=openJourney;
+$("#fwSave").onclick=saveFreeEntry;
 $("#journeyNext").onclick=journeyNext;
 $("#journeySkip").onclick=closeJourney;
 $("#panicConfess").addEventListener("input",()=>{ $("#panicCloseBtn").disabled = $("#panicConfess").value.trim()!==PANIC_CONFESS; });
