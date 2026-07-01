@@ -891,6 +891,19 @@ tbody tr:last-child td{border-bottom:none}
       <button class="btn btn-primary" id="fwSave" style="margin-top:10px;width:100%;justify-content:center">שמור רשומה</button>
       <div id="fwLog"></div>
     </div>
+    <div class="panel coach-daily">
+      <div class="panel-h"><h3>🧪 מבחן האסטרטגיה 5:1</h3><span class="hint">מיקרו · גודל קבוע · האמת מול קו 83%</span></div>
+      <div id="stStats" style="line-height:1.85;font-size:15px"></div>
+      <div id="stSeq" style="margin:10px 0;font-size:15px;letter-spacing:3px;direction:ltr;text-align:left;word-break:break-all"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-primary" id="stWin" style="flex:1;justify-content:center">✅ ניצחון</button>
+        <button class="btn btn-ghost" id="stLoss" style="flex:1;justify-content:center">❌ הפסד</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-ghost" id="stUndo" style="flex:1;justify-content:center">↩︎ בטל אחרון</button>
+        <button class="btn btn-ghost" id="stReset" style="flex:1;justify-content:center">אפס מבחן</button>
+      </div>
+    </div>
     <div class="insights" id="insights"></div>
   </div>
 
@@ -2461,9 +2474,40 @@ function delFreeEntry(id){
   if(!confirm("למחוק את הרשומה?")) return;
   freeLog=freeLog.filter(x=>x.id!==id); saveFree(); renderFree();
 }
+/* ---------- 5:1 strategy test tracker (honest instrument: win% vs 83.3% breakeven) ---------- */
+let stestLog=[]; const STEST_KEY="nasdaq_strattest_v1"; const STEST_BE=83.3;
+function loadStest(){ try{ const s=JSON.parse(Store.get(STEST_KEY)||"[]"); stestLog=Array.isArray(s)?s:[]; }catch(e){ stestLog=[]; } }
+function saveStest(){ Store.set(STEST_KEY, JSON.stringify(stestLog)); }
+function renderStest(){
+  const el=$("#stStats"); if(!el) return;
+  const n=stestLog.length, W=stestLog.filter(x=>x.r==="W").length, L=n-W;
+  const wr = n? (W/n*100) : 0;
+  const netU = W - 5*L;                 // in "win units" (win=+1, loss=−5)
+  const netMicro = netU*30;             // ≈ $ on micros (+30 / −150)
+  const col = wr>=85 ? "#26d07c" : (wr>=STEST_BE ? "#e6b800" : "#ff5c5c");
+  let cluster=false;                    // any 2 losses inside a window of 3 → account-killer pattern
+  for(let i=0;i<stestLog.length;i++){ if(stestLog.slice(i,i+3).filter(x=>x.r==="L").length>=2){ cluster=true; break; } }
+  let verdict="";
+  if(n<50) verdict=`<div style="color:var(--muted)">עוד ${50-n} עד נקודת הבדיקה הראשונה (50)</div>`;
+  else if(wr>=85 && netU>0) verdict=`<div style="color:#26d07c;font-weight:700">🎯 ${n} עסקאות · ${wr.toFixed(1)}% · ירוק — תשלח לי צילום, הגיע הזמן שאודה שטעיתי</div>`;
+  else if(wr<STEST_BE) verdict=`<div style="color:#ff5c5c;font-weight:700">המספר מדבר: מתחת ל‑83.3%. במבנה 5:1 זו לא שיטה מנצחת.</div>`;
+  else verdict=`<div style="color:#e6b800">בין 83% ל‑85% — על הקו. צריך עוד דגימות + מרווח מעל 85%.</div>`;
+  el.innerHTML =
+    `<div><b>${n}</b> / 150 עסקאות &nbsp;·&nbsp; ✅ ${W} &nbsp; ❌ ${L}</div>`
+    +`<div style="color:${col};font-weight:700">אחוז הצלחה ${wr.toFixed(1)}% <span style="color:var(--muted);font-weight:400">· קו איזון 83.3%</span></div>`
+    +`<div>מאזן: <b style="color:${netU>=0?'#26d07c':'#ff5c5c'}">${netU>=0?'+':''}${netU}</b> יחידות (W − 5×L) &nbsp;≈&nbsp; ${netMicro>=0?'+':''}${netMicro}$ במיקרו</div>`
+    +(cluster?`<div style="color:#ff5c5c">⚠ היה צמד הפסדים קרוב — זה מה ששורף חשבון אמיתי</div>`:``)
+    +verdict;
+  const seq=$("#stSeq");
+  if(seq){ const last=stestLog.slice(-30); seq.innerHTML = last.length ? last.map(x=>x.r==="W"?`<span style="color:#26d07c">●</span>`:`<span style="color:#ff5c5c">●</span>`).join("") : `<span style="color:var(--muted);font-size:13px">אין עדיין עסקאות — לחץ ניצחון/הפסד אחרי כל אחת</span>`; }
+}
+function stestAdd(r){ stestLog.push({ id:"st"+Date.now()+"_"+Math.random().toString(36).slice(2,6), at:Date.now(), r }); saveStest(); renderStest(); toast(r==="W"?"✅ נספר ניצחון":"❌ נספר הפסד — זו הדאטה החשובה"); }
+function stestUndo(){ if(!stestLog.length){ toast("אין מה לבטל"); return; } stestLog.pop(); saveStest(); renderStest(); }
+function stestReset(){ if(!confirm("לאפס את כל מבחן האסטרטגיה? הספירה תתחיל מ‑0.")) return; stestLog=[]; saveStest(); renderStest(); }
 function renderCoach(){
   renderCoachDaily();
   renderFree();
+  renderStest();
   const intro=$("#coachIntro"); if(!intro) return;
   const list=getClosed();
   if(list.length<3){
@@ -3426,7 +3470,7 @@ function lockApp(){
 }
 function resetLockTimer(){ clearTimeout(lockTimer); if(Store.isUnlocked() && !Store.isRemembered()) lockTimer=setTimeout(lockApp, LOCK_MS); }
 function bootData(){
-  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline(); loadCoach(); loadFree(); loadBurned();
+  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline(); loadCoach(); loadFree(); loadStest(); loadBurned();
   buildAccountOptions(); syncTimerInputs(); paintEmotion();
   scene3d = !reduceMo && Store.get("nasdaq_3d")!=="off";
   renderAll(); renderDiscipline(); renderBackupReminder();
@@ -3575,6 +3619,10 @@ $("#panicBreathe").onclick=()=>openBreathe("tilt");
 $("#panicLock").onclick=panicLockDay;
 $("#cdJourney").onclick=openJourney;
 $("#fwSave").onclick=saveFreeEntry;
+$("#stWin").onclick=()=>stestAdd("W");
+$("#stLoss").onclick=()=>stestAdd("L");
+$("#stUndo").onclick=stestUndo;
+$("#stReset").onclick=stestReset;
 $("#journeyNext").onclick=journeyNext;
 $("#journeySkip").onclick=closeJourney;
 $("#panicConfess").addEventListener("input",()=>{ $("#panicCloseBtn").disabled = $("#panicConfess").value.trim()!==PANIC_CONFESS; });
