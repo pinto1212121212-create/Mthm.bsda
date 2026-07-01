@@ -877,6 +877,8 @@ tbody tr:last-child td{border-bottom:none}
         <summary style="cursor:pointer;color:var(--muted);font-size:13px">התאם אישית — המטרה והאמונה שבריטואל</summary>
         <label class="cd-lbl">🎯 המטרה שלי (בהווה, חיובי)</label>
         <input id="rtGoal" placeholder="אני סוחר רגוע, מספיק כמו שאני.">
+        <label class="cd-lbl">🔥 מה אני פורק (האמונה/החוזה הישן)</label>
+        <textarea id="rtDischarge" placeholder="אני שווה רק כשאני מנצח · הערך שלי = התוצאה · אני לא מספיק."></textarea>
         <label class="cd-lbl">✨ האמונה החדשה שאני מטעין</label>
         <textarea id="rtBelief" placeholder="אני מספיק. הערך שלי ניתן לי, לא הרווחתי אותו — ואי אפשר לקחת אותו."></textarea>
         <button class="btn btn-primary" id="rtSave" style="margin-top:8px;width:100%;justify-content:center">שמור לריטואל</button>
@@ -1989,11 +1991,11 @@ function panicLockDay(){
 /* Honest note: muscle-testing/cellular-memory have no scientific basis. What works: goal + corrective reframe
    + multi-sensory imagery + breath + daily repetition + identity shift. Self-practice = daily regulation, not deep trauma. */
 const RITUAL_KEY="nasdaq_ritual_v1";
-const RITUAL_DEFAULTS={ goal:"אני סוחר רגוע, מספיק כמו שאני.", belief:"אני מספיק. נבראתי בצלם — הערך שלי ניתן לי, לא הרווחתי אותו, ואי אפשר לקחת אותו. המסחר הוא משהו שאני עושה, לא מי שאני." };
+const RITUAL_DEFAULTS={ goal:"אני סוחר רגוע, מספיק כמו שאני.", discharge:"אני שווה רק כשאני מנצח · הערך שלי = התוצאה · אני לא מספיק.", belief:"אני מספיק. נבראתי בצלם — הערך שלי ניתן לי, לא הרווחתי אותו, ואי אפשר לקחת אותו. המסחר הוא משהו שאני עושה, לא מי שאני." };
 let ritualCfg={...RITUAL_DEFAULTS};
-function loadRitual(){ try{ const r=JSON.parse(Store.get(RITUAL_KEY)||"null"); if(r&&typeof r==="object") ritualCfg={ goal:(r.goal||"").trim()||RITUAL_DEFAULTS.goal, belief:(r.belief||"").trim()||RITUAL_DEFAULTS.belief }; }catch(e){ ritualCfg={...RITUAL_DEFAULTS}; } }
+function loadRitual(){ try{ const r=JSON.parse(Store.get(RITUAL_KEY)||"null"); if(r&&typeof r==="object") ritualCfg={ goal:(r.goal||"").trim()||RITUAL_DEFAULTS.goal, discharge:(r.discharge||"").trim()||RITUAL_DEFAULTS.discharge, belief:(r.belief||"").trim()||RITUAL_DEFAULTS.belief }; }catch(e){ ritualCfg={...RITUAL_DEFAULTS}; } }
 function saveRitual(){ Store.set(RITUAL_KEY, JSON.stringify(ritualCfg)); }
-function personalize(t){ return t.replace(/\{\{goal\}\}/g, ritualCfg.goal).replace(/\{\{belief\}\}/g, ritualCfg.belief); }
+function personalize(t){ return t.replace(/\{\{goal\}\}/g, ritualCfg.goal).replace(/\{\{discharge\}\}/g, ritualCfg.discharge).replace(/\{\{belief\}\}/g, ritualCfg.belief); }
 const JOURNEY=[
   {h:"פריקה וטעינה · פרוטוקול מלא", t:"כמו 3 התפילות שלך — ריטואל קבוע.\nקודם פורקים את הישן, אז מטעינים את החדש.\nעל שלושה מימדים: גוף · רגש · מחשבה.\n\nהמטרה שלך היום:\n«{{goal}}»\n\nשב נוח. נשום. וכשאתה מוכן — המשך."},
   {h:"1 · מקום בטוח", t:"לפני שנוגעים בכאב — בונים רשת מתחת.\nעצום עיניים. הבא לזכרון מקום או רגע שבו הרגשת בטוח ורגוע לגמרי.\nראה אותו, שמע אותו, הרגש אותו בגוף.\n30 שניות פה.\n\nזה המקום שאליו תחזור אם משהו יציף. הוא תמיד שלך."},
@@ -2001,7 +2003,7 @@ const JOURNEY=[
   {h:"3 · מוכנות + קו אדום", t:"אמור בלב: «אני מוכן לשחרר את זה.»\n\n⚠ קו אדום: אם עולה הצפה, בכי בלתי נשלט, או זיכרון כבד מדי —\nעצור. חזור למקום הבטוח. נשום.\nזה סימן שזה למטפל מוסמך, לא לבד.\nהריטואל הזה הוא לוויסות יומיומי, לא לטראומה עמוקה."},
   {h:"4 · פריקה · גוף", t:"נשיפה פיזיולוגית — הדרך המהירה להרגיע את העצבים:\nשאף דרך האף… ואז עוד שאיפה קטנה למעלה.\nעכשיו נשוף לאט וארוך דרך הפה — עד הסוף.\nחזור 3 פעמים.\n\nעכשיו סרוק את הגוף: איפה החסם יושב? חזה? בטן? גרון?\nשים שם את תשומת הלב."},
   {h:"5 · פריקה · רגש · אחיזת המצח (ESR)", t:"הטכניקה החזקה ביותר לשחרור.\nהנח יד אחת על המצח, יד שנייה על העורף (מאחורי הראש).\nנשום לאט.\n\nעכשיו היזכר בשורש — לא רק בעסקה של היום, אלא מתי ה«לא מספיק» נולד.\nתן לזה לעלות בזמן שהידיים מחזיקות.\nהמשך לנשום עד שזה מתחיל לרדת.\nכשקל יותר — שחרר את הידיים."},
-  {h:"6 · פריקה · מחשבה · החוזה הישן", t:"תן שם לאמונה הישנה:\n«אני שווה רק כשאני מנצח.»\n\nהנח יד על הלב ואמור, באמת:\n«למרות שיש לי את זה — אני מקבל את עצמי לגמרי.\nילד קטן חתם על החוזה הזה כדי לשרוד.\nאני מודה לו — ומניח אותו.»\nהחוזה כבר לא שלך."},
+  {h:"6 · פריקה · מחשבה · החוזה הישן", t:"תן שם לאמונה הישנה:\n«{{discharge}}»\n\nהנח יד על הלב ואמור, באמת:\n«למרות שיש לי את זה — אני מקבל את עצמי לגמרי.\nילד קטן חתם על החוזה הזה כדי לשרוד.\nאני מודה לו — ומניח אותו.»\nהחוזה כבר לא שלך."},
   {h:"7 · מדידה שוב (0–10)", t:"דרג את החסם שוב.\n\nירד מתחת ל‑3? מצוין — אתה מוכן לטעינה.\nעדיין 4 ומעלה? אל תמהר.\nחזור לשלב 5 (אחיזת המצח), נשום, תן לזה לרדת.\nפורקים עד שמשתחרר."},
   {h:"8 · חוויה מתקנת", t:"עכשיו מטעינים.\nחזור בדמיון לאותו שורש — אבל הפעם צור גרסה מתוקנת:\nאותו מצב, ואתה בתוכו רגוע, בטוח, מספיק.\nראה איך זה נראה. הרגש איך זה מרגיש.\nזו התמונה החדשה שנכנסת במקום הישנה."},
   {h:"9 · טעינה · מחשבה", t:"התקן את האמונה החדשה — בהווה, בגוף ראשון.\nאמור, בלב או בקול:\n«{{belief}}»\nשוב. ושוב.\nתרגיש את המילים נכנסות פנימה כאמת."},
@@ -2527,10 +2529,11 @@ function stestReset(){ if(!confirm("לאפס את כל מבחן האסטרטגי
 function renderRitualCfg(){
   if(!$("#rtGoal")) return;
   $("#rtGoal").value = (ritualCfg.goal===RITUAL_DEFAULTS.goal)?"":ritualCfg.goal;
+  $("#rtDischarge").value = (ritualCfg.discharge===RITUAL_DEFAULTS.discharge)?"":ritualCfg.discharge;
   $("#rtBelief").value = (ritualCfg.belief===RITUAL_DEFAULTS.belief)?"":ritualCfg.belief;
 }
 function saveRitualCfg(){
-  ritualCfg={ goal:($("#rtGoal").value.trim()||RITUAL_DEFAULTS.goal), belief:($("#rtBelief").value.trim()||RITUAL_DEFAULTS.belief) };
+  ritualCfg={ goal:($("#rtGoal").value.trim()||RITUAL_DEFAULTS.goal), discharge:($("#rtDischarge").value.trim()||RITUAL_DEFAULTS.discharge), belief:($("#rtBelief").value.trim()||RITUAL_DEFAULTS.belief) };
   saveRitual(); renderRitualCfg(); toast("נשמר לריטואל ✓");
 }
 function renderCoach(){
