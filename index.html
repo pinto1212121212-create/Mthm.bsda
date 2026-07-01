@@ -872,7 +872,15 @@ tbody tr:last-child td{border-bottom:none}
     <div class="panel coach-daily">
       <div class="panel-h"><h3>🧠 המאמן היומי</h3><span class="hint">סחור את התהליך, לא את התוצאה</span></div>
       <div class="cd-mantra">"זה כבר אבוד. עכשיו אני פשוט סוחר נכון — המעבר יבוא לבד."</div>
-      <button class="btn btn-enter" id="cdJourney" style="width:100%;justify-content:center;margin-bottom:6px">🙏 פריקה וטעינה · 3 מימדים (6 דק׳)</button>
+      <button class="btn btn-enter" id="cdJourney" style="width:100%;justify-content:center;margin-bottom:6px">🙏 פריקה וטעינה · פרוטוקול מלא (8–10 דק׳)</button>
+      <details style="margin-bottom:10px">
+        <summary style="cursor:pointer;color:var(--muted);font-size:13px">התאם אישית — המטרה והאמונה שבריטואל</summary>
+        <label class="cd-lbl">🎯 המטרה שלי (בהווה, חיובי)</label>
+        <input id="rtGoal" placeholder="אני סוחר רגוע, מספיק כמו שאני.">
+        <label class="cd-lbl">✨ האמונה החדשה שאני מטעין</label>
+        <textarea id="rtBelief" placeholder="אני מספיק. הערך שלי ניתן לי, לא הרווחתי אותו — ואי אפשר לקחת אותו."></textarea>
+        <button class="btn btn-primary" id="rtSave" style="margin-top:8px;width:100%;justify-content:center">שמור לריטואל</button>
+      </details>
       <label class="cd-lbl">🎯 יעד התהליך שלי היום</label>
       <input id="cdGoal" placeholder="לדוגמה: מקס׳ 3 עסקאות · רק כשרגוע · סטופ תמיד">
       <label class="cd-lbl">✅ מה עבד היום? (הדבר הטוב שעשיתי — אחזור עליו)</label>
@@ -1977,22 +1985,34 @@ function panicLockDay(){
   $("#panicOverlay").classList.remove("open"); document.body.style.overflow="";
   toast("🔒 ננעלת למסחר היום. זו לא חולשה — זו עוצמה.");
 }
-/* ---------- guided "discharge & charge" ritual (3 dimensions: body · emotion · mind) ---------- */
+/* ---------- guided "discharge & charge" ritual — full 3-dimensions protocol (faithful + safety gaps filled) ---------- */
+/* Honest note: muscle-testing/cellular-memory have no scientific basis. What works: goal + corrective reframe
+   + multi-sensory imagery + breath + daily repetition + identity shift. Self-practice = daily regulation, not deep trauma. */
+const RITUAL_KEY="nasdaq_ritual_v1";
+const RITUAL_DEFAULTS={ goal:"אני סוחר רגוע, מספיק כמו שאני.", belief:"אני מספיק. נבראתי בצלם — הערך שלי ניתן לי, לא הרווחתי אותו, ואי אפשר לקחת אותו. המסחר הוא משהו שאני עושה, לא מי שאני." };
+let ritualCfg={...RITUAL_DEFAULTS};
+function loadRitual(){ try{ const r=JSON.parse(Store.get(RITUAL_KEY)||"null"); if(r&&typeof r==="object") ritualCfg={ goal:(r.goal||"").trim()||RITUAL_DEFAULTS.goal, belief:(r.belief||"").trim()||RITUAL_DEFAULTS.belief }; }catch(e){ ritualCfg={...RITUAL_DEFAULTS}; } }
+function saveRitual(){ Store.set(RITUAL_KEY, JSON.stringify(ritualCfg)); }
+function personalize(t){ return t.replace(/\{\{goal\}\}/g, ritualCfg.goal).replace(/\{\{belief\}\}/g, ritualCfg.belief); }
 const JOURNEY=[
-  {h:"פריקה וטעינה · 3 מימדים", t:"כמו 3 התפילות שלך — ריטואל קבוע.\nקודם פורקים את החסימה, אז מטעינים את החדש.\nגוף · רגש · מחשבה.\n\n→ לפני שמתחילים: דרג בלב את עוצמת החסם עכשיו, 0–10.\n(10 = הלחץ/הפחד הכי חזק, 0 = רגוע לגמרי).\nזכור את המספר — נמדוד שוב בסוף.\nשב נוח, וכשאתה מוכן — המשך."},
-  {h:"פריקה · גוף · נשיפה", t:"נשיפה פיזיולוגית — הדרך המהירה להרגיע את העצבים:\nשאף דרך האף… ואז עוד שאיפה קטנה למעלה.\nעכשיו נשוף לאט וארוך דרך הפה — עד הסוף.\nחזור 3 פעמים.\n\nנער את כפות הידיים חזק, 5 שניות.\nדמיין שאתה מוריד תרמיל כבד מהגב לרצפה.\nהגוף נקי וקל."},
-  {h:"פריקה · רגש · אחיזת המצח", t:"זו הטכניקה החזקה ביותר — ESR.\nהנח יד אחת על המצח, יד שנייה מאחורי הראש (העורף).\nנשום לאט.\nעכשיו — היזכר בדיוק ברגע שחוסם אותך:\n«אני מפחד להיכשל שוב.»\nתן לזה לעלות בזמן שהידיים מחזיקות.\nאיפה זה יושב — בחזה? בבטן?\nהמשך לנשום עד שזה מתחיל לרדת.\nכשמרגיש קל יותר — שחרר את הידיים."},
-  {h:"פריקה · מחשבה", t:"זהה את האמונה הישנה:\n«אני תמיד נשבר בלחץ.»\nהנח יד על הלב ואמור, באמת:\n«למרות שיש לי את הפחד הזה — אני מקבל את עצמי לגמרי.»\nשוב. ושוב.\nהיא לא אמת — היא הרגל ישן.\n«אני משחרר את המחשבה הזו. היא לא שולטת בי יותר.»"},
-  {h:"בדיקה · ירד?", t:"דרג שוב את החסם, 0–10.\n\nאם ירד מתחת ל‑3 — מצוין, אתה מוכן לטעינה.\nאם עדיין 4 ומעלה — אל תמשיך עדיין.\nחזור פעם נוספת על אחיזת המצח (שלב 3),\nנשום, ותן לזה לרדת.\nפורקים עד שמשתחרר — לא ממהרים."},
-  {h:"טעינה · גוף · העוגן", t:"עכשיו מטעינים את החדש.\nזקף את הגב. נשימה איטית ויציבה.\nהרגש את הרוגע נכנס לגוף.\nוברגע השיא של הרוגע — לחץ אגודל ואצבע יחד, חזק.\nהחזק 3 שניות. שחרר.\n\nזה העוגן שלך. שמור אותו —\nבזמן המסחר, כשהלב מתחיל לדהור,\nתלחץ אגודל+אצבע, והרוגע הזה יחזור."},
-  {h:"טעינה · רגש", t:"הרגש את זה עכשיו — שלווה. ביטחון.\nכמו אחרי תפילה — נקי, מחובר, רגוע.\nתן לתחושה למלא אותך מהראש עד הרגליים.\nככל שזה חזק יותר — העוגן חזק יותר.\nזה אתה. זה הסוחר שאתה."},
-  {h:"טעינה · מחשבה", t:"התקן את האמונה החדשה. בהווה, אמיתי, על התהליך —\nלא «אני אצליח» אלא «אני סוחר נכון עכשיו».\nאמור, בלב או בקול:\n«אני סוחר רגוע.\nאני סוחר את התהליך, לא את התוצאה.\nאני מכבד את הסטופ ואת התוכנית.\nההפסד לא מזיז אותי — הוא חלק מהעבודה.»\nשוב. תרגיש שהמילים נכנסות פנימה."},
-  {h:"חתימה", t:"לחץ אגודל+אצבע — ירה את העוגן פעם אחרונה.\nקח נשימה עמוקה. ספור 1… 2… 3.\nפרקת את הישן. הטענת את החדש.\nאתה רגוע, ממוקד, מוכן.\n\nכמו 3 התפילות: עשה את זה בבוקר לפני המסחר,\nוקצר בערב לפרוק את היום.\nכל יום. ככה זה נדבק.\nלך תסחור את התהליך. 🙏"}
+  {h:"פריקה וטעינה · פרוטוקול מלא", t:"כמו 3 התפילות שלך — ריטואל קבוע.\nקודם פורקים את הישן, אז מטעינים את החדש.\nעל שלושה מימדים: גוף · רגש · מחשבה.\n\nהמטרה שלך היום:\n«{{goal}}»\n\nשב נוח. נשום. וכשאתה מוכן — המשך."},
+  {h:"1 · מקום בטוח", t:"לפני שנוגעים בכאב — בונים רשת מתחת.\nעצום עיניים. הבא לזכרון מקום או רגע שבו הרגשת בטוח ורגוע לגמרי.\nראה אותו, שמע אותו, הרגש אותו בגוף.\n30 שניות פה.\n\nזה המקום שאליו תחזור אם משהו יציף. הוא תמיד שלך."},
+  {h:"2 · מדידה (0–10)", t:"דרג עכשיו, בכנות, את עוצמת ה«לא מספיק» / הלחץ:\n0 = רגוע לגמרי · 10 = הכי חזק.\n\nזכור את המספר. נמדוד שוב אחרי הפריקה כדי לדעת שבאמת השתחרר — לא רק ננחש."},
+  {h:"3 · מוכנות + קו אדום", t:"אמור בלב: «אני מוכן לשחרר את זה.»\n\n⚠ קו אדום: אם עולה הצפה, בכי בלתי נשלט, או זיכרון כבד מדי —\nעצור. חזור למקום הבטוח. נשום.\nזה סימן שזה למטפל מוסמך, לא לבד.\nהריטואל הזה הוא לוויסות יומיומי, לא לטראומה עמוקה."},
+  {h:"4 · פריקה · גוף", t:"נשיפה פיזיולוגית — הדרך המהירה להרגיע את העצבים:\nשאף דרך האף… ואז עוד שאיפה קטנה למעלה.\nעכשיו נשוף לאט וארוך דרך הפה — עד הסוף.\nחזור 3 פעמים.\n\nעכשיו סרוק את הגוף: איפה החסם יושב? חזה? בטן? גרון?\nשים שם את תשומת הלב."},
+  {h:"5 · פריקה · רגש · אחיזת המצח (ESR)", t:"הטכניקה החזקה ביותר לשחרור.\nהנח יד אחת על המצח, יד שנייה על העורף (מאחורי הראש).\nנשום לאט.\n\nעכשיו היזכר בשורש — לא רק בעסקה של היום, אלא מתי ה«לא מספיק» נולד.\nתן לזה לעלות בזמן שהידיים מחזיקות.\nהמשך לנשום עד שזה מתחיל לרדת.\nכשקל יותר — שחרר את הידיים."},
+  {h:"6 · פריקה · מחשבה · החוזה הישן", t:"תן שם לאמונה הישנה:\n«אני שווה רק כשאני מנצח.»\n\nהנח יד על הלב ואמור, באמת:\n«למרות שיש לי את זה — אני מקבל את עצמי לגמרי.\nילד קטן חתם על החוזה הזה כדי לשרוד.\nאני מודה לו — ומניח אותו.»\nהחוזה כבר לא שלך."},
+  {h:"7 · מדידה שוב (0–10)", t:"דרג את החסם שוב.\n\nירד מתחת ל‑3? מצוין — אתה מוכן לטעינה.\nעדיין 4 ומעלה? אל תמהר.\nחזור לשלב 5 (אחיזת המצח), נשום, תן לזה לרדת.\nפורקים עד שמשתחרר."},
+  {h:"8 · חוויה מתקנת", t:"עכשיו מטעינים.\nחזור בדמיון לאותו שורש — אבל הפעם צור גרסה מתוקנת:\nאותו מצב, ואתה בתוכו רגוע, בטוח, מספיק.\nראה איך זה נראה. הרגש איך זה מרגיש.\nזו התמונה החדשה שנכנסת במקום הישנה."},
+  {h:"9 · טעינה · מחשבה", t:"התקן את האמונה החדשה — בהווה, בגוף ראשון.\nאמור, בלב או בקול:\n«{{belief}}»\nשוב. ושוב.\nתרגיש את המילים נכנסות פנימה כאמת."},
+  {h:"10 · טעינה · רגש", t:"הרגש את זה עכשיו — שלווה, ביטחון, ערך.\nכמו אחרי תפילה: נקי, מחובר, רגוע.\nתן לתחושה למלא אותך מהראש עד הרגליים.\nככל שזה חזק יותר — כך זה נחקק עמוק יותר."},
+  {h:"11 · טעינה · תחושה + עוגן", t:"התחושה בשיא עכשיו.\nברגע הזה — לחץ אגודל ואצבע יחד, חזק. החזק 3 שניות. שחרר.\n\nזה העוגן שלך.\nבזמן המסחר, כשהלב מתחיל לדהור —\nתלחץ אגודל+אצבע, והמצב הזה יחזור."},
+  {h:"12 · חתימה + קצב יומי", t:"לחץ אגודל+אצבע — ירה את העוגן פעם אחרונה.\nנשימה עמוקה. ספור 1… 2… 3.\nפרקת את הישן. הטענת את החדש.\nאתה רגוע, ממוקד, מספיק.\n\nכמו 3 התפילות: בוקר לפני המסחר, ערב אחרי — לפרוק את היום.\nאל תפספס יומיים ברצף. ככה זה נדבק.\nלך תסחור את התהליך. 🙏"}
 ];
 let journeyIdx=0;
 function renderJourney(){
   const s=JOURNEY[journeyIdx];
-  $("#journeyText").innerHTML="<b>"+escapeHtml(s.h)+"</b>"+escapeHtml(s.t).replace(/\n/g,"<br>");
+  $("#journeyText").innerHTML="<b>"+escapeHtml(s.h)+"</b>"+escapeHtml(personalize(s.t)).replace(/\n/g,"<br>");
   $("#journeyStep").textContent=(journeyIdx+1)+" / "+JOURNEY.length;
   $("#journeyNext").textContent = journeyIdx>=JOURNEY.length-1 ? "סיימתי — אני רגוע" : "המשך ←";
 }
@@ -2504,10 +2524,20 @@ function renderStest(){
 function stestAdd(r){ stestLog.push({ id:"st"+Date.now()+"_"+Math.random().toString(36).slice(2,6), at:Date.now(), r }); saveStest(); renderStest(); toast(r==="W"?"✅ נספר ניצחון":"❌ נספר הפסד — זו הדאטה החשובה"); }
 function stestUndo(){ if(!stestLog.length){ toast("אין מה לבטל"); return; } stestLog.pop(); saveStest(); renderStest(); }
 function stestReset(){ if(!confirm("לאפס את כל מבחן האסטרטגיה? הספירה תתחיל מ‑0.")) return; stestLog=[]; saveStest(); renderStest(); }
+function renderRitualCfg(){
+  if(!$("#rtGoal")) return;
+  $("#rtGoal").value = (ritualCfg.goal===RITUAL_DEFAULTS.goal)?"":ritualCfg.goal;
+  $("#rtBelief").value = (ritualCfg.belief===RITUAL_DEFAULTS.belief)?"":ritualCfg.belief;
+}
+function saveRitualCfg(){
+  ritualCfg={ goal:($("#rtGoal").value.trim()||RITUAL_DEFAULTS.goal), belief:($("#rtBelief").value.trim()||RITUAL_DEFAULTS.belief) };
+  saveRitual(); renderRitualCfg(); toast("נשמר לריטואל ✓");
+}
 function renderCoach(){
   renderCoachDaily();
   renderFree();
   renderStest();
+  renderRitualCfg();
   const intro=$("#coachIntro"); if(!intro) return;
   const list=getClosed();
   if(list.length<3){
@@ -3470,7 +3500,7 @@ function lockApp(){
 }
 function resetLockTimer(){ clearTimeout(lockTimer); if(Store.isUnlocked() && !Store.isRemembered()) lockTimer=setTimeout(lockApp, LOCK_MS); }
 function bootData(){
-  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline(); loadCoach(); loadFree(); loadStest(); loadBurned();
+  loadAccounts(); load(); migrateAccounts(); loadRules(); loadTimer(); loadVision(); loadDiscipline(); loadCoach(); loadFree(); loadStest(); loadRitual(); loadBurned();
   buildAccountOptions(); syncTimerInputs(); paintEmotion();
   scene3d = !reduceMo && Store.get("nasdaq_3d")!=="off";
   renderAll(); renderDiscipline(); renderBackupReminder();
@@ -3618,6 +3648,7 @@ $("#panicFab").onclick=openPanic;
 $("#panicBreathe").onclick=()=>openBreathe("tilt");
 $("#panicLock").onclick=panicLockDay;
 $("#cdJourney").onclick=openJourney;
+$("#rtSave").onclick=saveRitualCfg;
 $("#fwSave").onclick=saveFreeEntry;
 $("#stWin").onclick=()=>stestAdd("W");
 $("#stLoss").onclick=()=>stestAdd("L");
